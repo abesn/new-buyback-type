@@ -1,0 +1,138 @@
+name: buybacksite
+
+services:
+  - name: web
+    # ── Source ────────────────────────────────────────────────────────────────
+    github:
+      repo: abesn/multi-tenant-saas
+      branch: develop
+      deploy_on_push: true
+
+    # The Next.js app is not at the repo root — point DO to the right subdirectory
+    source_dir: Downloads/buybacksite
+
+    # ── Build & run ───────────────────────────────────────────────────────────
+    build_command: npm ci && npm run build
+    run_command: npm start
+    http_port: 3000
+
+    # ── Resources ─────────────────────────────────────────────────────────────
+    instance_size_slug: basic-s        # 1 vCPU / 1 GB RAM — upgrade as needed
+    instance_count: 1
+
+    # ── Health check ──────────────────────────────────────────────────────────
+    health_check:
+      http_path: /api/health
+
+    # ── Environment variables ─────────────────────────────────────────────────
+    # NEXT_PUBLIC_* vars are baked in at build time — changing them requires
+    # a redeploy. All other vars are runtime-only.
+    #
+    # To switch domains (e.g. buybacksite.com → wer.org):
+    #   1. Update NEXT_PUBLIC_ROOT_DOMAIN, NEXT_PUBLIC_APP_URL, NEXTAUTH_URL
+    #   2. Trigger a redeploy (any push, or "Force Rebuild" in the DO dashboard)
+    #   3. Update DNS in Cloudflare
+    #   4. Update the Stripe webhook URL
+    envs:
+      # ── Domain (only these 3 change when you switch to wer.org) ─────────────
+      - key: NEXT_PUBLIC_ROOT_DOMAIN
+        value: "buybacksite.com"     # ← change to wer.org when ready
+        scope: BUILD_TIME
+
+      - key: NEXT_PUBLIC_APP_URL
+        value: "https://app.buybacksite.com"   # ← change to https://app.wer.org
+        scope: BUILD_TIME
+
+      - key: NEXTAUTH_URL
+        value: "https://app.buybacksite.com"   # ← change to https://app.wer.org
+        scope: RUN_TIME
+
+      # ── Email addresses ───────────────────────────────────────────────────
+      - key: NEXT_PUBLIC_SUPPORT_EMAIL
+        value: "support@buybacksite.com"    # ← change to support@wer.org
+        scope: BUILD_TIME
+
+      - key: NEXT_PUBLIC_SALES_EMAIL
+        value: "sales@buybacksite.com"      # ← change to sales@wer.org
+        scope: BUILD_TIME
+
+      - key: NEXT_PUBLIC_HELLO_EMAIL
+        value: "hello@buybacksite.com"      # ← change to hello@wer.org
+        scope: BUILD_TIME
+
+      # ── Secrets (set values in DO dashboard, not here) ────────────────────
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: NEXTAUTH_SECRET
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+        scope: BUILD_TIME
+        type: SECRET
+
+      - key: STRIPE_SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: STRIPE_WEBHOOK_SECRET
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: STRIPE_PRICE_STARTER_MONTHLY
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: STRIPE_PRICE_STARTER_ANNUAL
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: STRIPE_PRICE_GROWTH_MONTHLY
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: STRIPE_PRICE_GROWTH_ANNUAL
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: STRIPE_PRICE_PRO_MONTHLY
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: STRIPE_PRICE_PRO_ANNUAL
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: EMAIL_SERVER_HOST
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: EMAIL_SERVER_PORT
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: EMAIL_SERVER_USER
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: EMAIL_SERVER_PASSWORD
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: EMAIL_FROM
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: EBAY_APP_ID
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: EBAY_CERT_ID
+        scope: RUN_TIME
+        type: SECRET
+
+      - key: EASYPOST_API_KEY
+        scope: RUN_TIME
+        type: SECRET

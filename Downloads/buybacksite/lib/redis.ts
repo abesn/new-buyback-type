@@ -4,14 +4,15 @@ const globalForRedis = globalThis as unknown as {
   redis: Redis | undefined;
 };
 
-function createRedisClient(): Redis {
+function createRedisClient(): Redis | null {
   const url = process.env.REDIS_URL;
 
   if (!url) {
-    throw new Error(
-      "REDIS_URL environment variable is not set. " +
-        "Add a Redis service in Railway and copy the connection string."
+    console.warn(
+      "[Redis] REDIS_URL is not set — caching and sync-progress disabled. " +
+        "Add a Redis service in Railway to enable them."
     );
+    return null;
   }
 
   const client = new Redis(url, {
@@ -21,21 +22,29 @@ function createRedisClient(): Redis {
   });
 
   client.on("error", (err) => {
-    // Don't crash the process on Redis connection errors
     console.error("[Redis] Connection error:", err.message);
   });
 
   return client;
 }
 
-export const redis = globalForRedis.redis ?? createRedisClient();
+// May be null when REDIS_URL is not configured (dev / CI)
+export const redis: Redis | null =
+  globalForRedis.redis !== undefined
+    ? (globalForRedis.redis ?? null)
+    : createRedisClient();
 
-if (process.env.NODE_ENV !== "production") globalForRedis.redis = redis;
+if (process.env.NODE_ENV !== "production") {
+  (globalThis as unknown as { redis: Redis | null }).redis = redis;
+}
 
 // ─── Typed cache helpers ───────────────────────────────────────────────────────
+// All helpers are no-ops when Redis is unavailable — the app stays functional,
+// just without caching (each request hits the DB directly).
 
-/** Get a cached value and parse JSON. Returns null if missing or parse fails. */
+/** Get a cached value and parse JSON. Returns null if missing or Redis is down. */
 export async function cacheGet<T>(key: string): Promise<T | null> {
+  if (!redis) return null;
   try {
     const value = await redis.get(key);
     if (!value) return null;
@@ -45,12 +54,13 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
   }
 }
 
-/** Set a JSON value with optional TTL in seconds. */
+/** Set a JSON value with optional TTL in seconds. Silent no-op if Redis is down. */
 export async function cacheSet(
   key: string,
   value: unknown,
   ttlSeconds?: number
 ): Promise<void> {
+  if (!redis) return;
   try {
     const serialized = JSON.stringify(value);
     if (ttlSeconds) {
@@ -63,8 +73,9 @@ export async function cacheSet(
   }
 }
 
-/** Delete one or more cache keys. */
+/** Delete one or more cache keys. Silent no-op if Redis is down. */
 export async function cacheDel(...keys: string[]): Promise<void> {
+  if (!redis) return;
   try {
     if (keys.length > 0) await redis.del(...keys);
   } catch (err) {
@@ -73,20 +84,12 @@ export async function cacheDel(...keys: string[]): Promise<void> {
 }
 
 // ─── Cache key constants ───────────────────────────────────────────────────────
-// Centralised here so key format is consistent across the codebase.
 
 export const CacheKey = {
-  // Tenant lookup by custom domain — 1hr TTL
-  tenantByDomain: (domain: string) => `tenant:domain:${domain}`,
-
-  // Tenant lookup by slug — 1hr TTL
-  tenantBySlug: (slug: string) => `tenant:slug:${slug}`,
-
-  // Public price feed per tenant — 6hr TTL, invalidated on price sync
-  feedJson: (tenantId: string) => `feed:json:${tenantId}`,
-  feedXml: (tenantId: string) => `feed:xml:${tenantId}`,
-  feedEtag: (tenantId: string) => `feed:etag:${tenantId}`,
-
-  // Market prices from eBay — 6hr TTL
-  marketPrice: (variantId: string) => `market:${variantId}`,
+  tenantByDomain:  (domain: string)   => `tenant:domain:${domain}`,
+  tenantBySlug:    (slug: string)     => `tenant:slug:${slug}`,
+  feedJson:        (tenantId: string) => `feed:json:${tenantId}`,
+  feedXml:         (tenantId: string) => `feed:xml:${tenantId}`,
+  feedEtag:        (tenantId: string) => `feed:etag:${tenantId}`,
+  marketPrice:     (variantId: string) => `market:${variantId}`,
 } as const;

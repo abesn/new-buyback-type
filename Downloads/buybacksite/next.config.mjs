@@ -1,6 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   // Allow images from CDN and device image sources
   images: {
     remotePatterns: [
@@ -42,11 +41,10 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Suppress annoying hydration warnings from browser extensions
+  // Suppress hydration warnings from browser extensions
   reactStrictMode: true,
 
   // Required for multi-tenant custom domain routing
-  // Allows any hostname to be served (Cloudflare/Railway handles the certs)
   experimental: {
     serverComponentsExternalPackages: ["@prisma/client"],
   },

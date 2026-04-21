@@ -2,18 +2,33 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { PayoutMethod } from "@prisma/client";
 import { sendOrderConfirmation, sendNewOrderAlert } from "@/lib/email";
+import { generateShippingLabel } from "@/lib/easypost";
+
+// ─── Request body ──────────────────────────────────────────────────────────────
+
+interface OrderItem {
+  variantId: string;
+  conditionId: string;
+}
 
 interface CreateOrderBody {
   tenantId: string;
-  variantId: string;
-  conditionId: string;
   sellerName: string;
   sellerEmail: string;
   sellerPhone?: string;
   payoutMethod: PayoutMethod;
   payoutAddress: string;
   deviceNotes?: string;
+  // Seller address — used to generate prepaid shipping label
+  sellerStreet: string;
+  sellerCity: string;
+  sellerState: string;
+  sellerZip: string;
+  // One or more devices being sold in this shipment
+  items: OrderItem[];
 }
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 async function generateOrderNumber(tenantId: string): Promise<string> {
   const year = new Date().getFullYear();
@@ -24,9 +39,10 @@ async function generateOrderNumber(tenantId: string): Promise<string> {
     const conflict = await db.order.findUnique({ where: { orderNumber: candidate } });
     if (!conflict) return candidate;
   }
-  // Fallback: use timestamp
   return `BB-${Date.now().toString(36).toUpperCase()}`;
 }
+
+// ─── POST /api/quote/order ─────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   let body: CreateOrderBody;
@@ -37,119 +53,186 @@ export async function POST(req: NextRequest) {
   }
 
   const {
-    tenantId, variantId, conditionId,
-    sellerName, sellerEmail, sellerPhone,
+    tenantId, sellerName, sellerEmail, sellerPhone,
     payoutMethod, payoutAddress, deviceNotes,
+    sellerStreet, sellerCity, sellerState, sellerZip,
+    items,
   } = body;
 
-  if (!tenantId || !variantId || !conditionId || !sellerName || !sellerEmail || !payoutMethod) {
+  if (!tenantId || !sellerName || !sellerEmail || !payoutMethod || !items?.length) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
-
-  // Validate email format
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sellerEmail)) {
     return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
   }
 
-  // Verify tenant is active
+  // ── Verify tenant ────────────────────────────────────────────────────────────
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId, status: { in: ["TRIAL", "ACTIVE"] } },
-    include: { napSettings: true, users: { where: { role: "TENANT_ADMIN" }, select: { email: true } } },
+    include: {
+      napSettings: true,
+      users: { where: { role: "TENANT_ADMIN" }, select: { email: true } },
+    },
   });
   if (!tenant) {
     return NextResponse.json({ error: "Tenant not found or inactive" }, { status: 404 });
   }
 
-  // Look up the verified price from DB (don't trust client-sent price)
-  const priceRow = await db.buybackPrice.findUnique({
-    where: { tenantId_variantId_conditionId: { tenantId, variantId, conditionId } },
-    include: {
-      variant: { include: { model: true } },
-      condition: true,
-    },
-  });
+  // ── Verify all prices from DB (never trust client-sent prices) ───────────────
+  const priceRows = await Promise.all(
+    items.map(({ variantId, conditionId }) =>
+      db.buybackPrice.findUnique({
+        where: { tenantId_variantId_conditionId: { tenantId, variantId, conditionId } },
+        include: { variant: { include: { model: true } }, condition: true },
+      })
+    )
+  );
 
-  if (!priceRow) {
-    return NextResponse.json({ error: "Price not found for this device/condition" }, { status: 404 });
+  const missing = priceRows.findIndex((p) => !p);
+  if (missing !== -1) {
+    return NextResponse.json(
+      { error: `Price not found for item ${missing + 1}` },
+      { status: 404 }
+    );
   }
 
-  const orderNumber = await generateOrderNumber(tenantId);
-  const quotedPrice = Number(priceRow.buyPrice);
-  const variant = priceRow.variant;
-  const condition = priceRow.condition;
+  const verified = priceRows as NonNullable<(typeof priceRows)[number]>[];
+  const nap = tenant.napSettings;
 
-  // Create order + initial status history
-  const order = await db.order.create({
-    data: {
-      tenantId,
-      orderNumber,
-      sellerName: sellerName.trim(),
-      sellerEmail: sellerEmail.trim().toLowerCase(),
-      sellerPhone: sellerPhone?.trim() || null,
-      variantId,
-      conditionId,
-      quotedPrice,
-      payoutMethod,
-      payoutAddress: payoutAddress?.trim() || null,
-      deviceNotes: deviceNotes?.trim() || null,
-      status: "PENDING",
-      statusHistory: {
-        create: {
-          status: "PENDING",
-          note: "Order created via quote wizard",
+  // ── Generate one prepaid shipping label for the whole shipment ───────────────
+  let labelUrl: string | null = null;
+  let trackingNumber: string | null = null;
+  let carrierName: string | null = null;
+
+  if (nap && sellerStreet && sellerCity && sellerState && sellerZip) {
+    try {
+      const label = await generateShippingLabel(
+        { name: sellerName,       street1: sellerStreet, city: sellerCity, state: sellerState, zip: sellerZip },
+        { name: nap.businessName, street1: nap.streetAddress, city: nap.city, state: nap.state, zip: nap.zipCode }
+      );
+      labelUrl       = label.labelUrl;
+      trackingNumber = label.trackingNumber;
+      carrierName    = label.carrier;
+    } catch (err) {
+      console.error("[order] Label generation failed:", err);
+      // Non-fatal — order still gets created
+    }
+  }
+
+  // ── Create one order per device (all share the same label) ───────────────────
+  const createdOrders: {
+    orderNumber: string;
+    quotedPrice: number;
+    deviceName: string;
+    storageGb: number;
+    carrier: string;
+    conditionLabel: string;
+  }[] = [];
+
+  for (const row of verified) {
+    const orderNumber = await generateOrderNumber(tenantId);
+    const quotedPrice = Number(row.buyPrice);
+
+    await db.order.create({
+      data: {
+        tenantId,
+        orderNumber,
+        sellerName:       sellerName.trim(),
+        sellerEmail:      sellerEmail.trim().toLowerCase(),
+        sellerPhone:      sellerPhone?.trim()   || null,
+        variantId:        row.variantId,
+        conditionId:      row.conditionId,
+        quotedPrice,
+        payoutMethod,
+        payoutAddress:    payoutAddress?.trim() || null,
+        deviceNotes:      deviceNotes?.trim()   || null,
+        shippingLabelUrl: labelUrl,
+        trackingNumber,
+        carrierName,
+        status: "PENDING",
+        statusHistory: {
+          create: {
+            status: "PENDING",
+            note: items.length > 1
+              ? `Order created via quote wizard (batch of ${items.length} devices)`
+              : "Order created via quote wizard",
+          },
         },
       },
-    },
-  });
+    });
 
-  // Send confirmation email to seller
-  const nap = tenant.napSettings;
-  if (nap) {
-    await sendOrderConfirmation({
-      to: sellerEmail,
-      sellerName,
+    createdOrders.push({
       orderNumber,
-      deviceName: variant.model.name,
-      storageGb: variant.storageGb,
-      carrier: variant.carrier,
-      conditionLabel: condition.label,
       quotedPrice,
-      payoutMethod,
-      shippingName: nap.businessName,
-      shippingAddress: nap.streetAddress,
-      shippingCity: nap.city,
-      shippingState: nap.state,
-      shippingZip: nap.zipCode,
-      shopName: tenant.name,
-      shopPhone: nap.phone,
+      deviceName:     row.variant.model.name,
+      storageGb:      row.variant.storageGb,
+      carrier:        row.variant.carrier,
+      conditionLabel: row.condition.label,
     });
   }
 
-  // Alert shop owner
+  const totalPrice = createdOrders.reduce((s, o) => s + o.quotedPrice, 0);
+  const firstOrder = createdOrders[0];
+
+  // ── Confirmation email (single email listing all devices) ────────────────────
+  if (nap) {
+    const deviceSummary = createdOrders.map((o) => {
+      const storage = o.storageGb >= 1024 ? "1TB" : `${o.storageGb}GB`;
+      const carrier = o.carrier === "UNLOCKED" ? "Unlocked" : o.carrier.replace("TMOBILE", "T-Mobile");
+      return `${o.deviceName} ${storage} · ${carrier} · ${o.conditionLabel}`;
+    });
+
+    await sendOrderConfirmation({
+      to:              sellerEmail,
+      sellerName,
+      // Use first order number as the reference; all are listed in the email body
+      orderNumber:     firstOrder.orderNumber,
+      allOrders:       createdOrders,
+      deviceName:      firstOrder.deviceName,
+      storageGb:       firstOrder.storageGb,
+      carrier:         firstOrder.carrier,
+      conditionLabel:  firstOrder.conditionLabel,
+      quotedPrice:     totalPrice,
+      payoutMethod,
+      shippingName:    nap.businessName,
+      shippingAddress: nap.streetAddress,
+      shippingCity:    nap.city,
+      shippingState:   nap.state,
+      shippingZip:     nap.zipCode,
+      shopName:        tenant.name,
+      shopPhone:       nap.phone,
+      labelUrl:        labelUrl    ?? undefined,
+      trackingNumber:  trackingNumber ?? undefined,
+      deviceSummary,
+    });
+  }
+
+  // ── Shop owner alert ─────────────────────────────────────────────────────────
   const adminEmail = tenant.users[0]?.email;
   if (adminEmail) {
     const baseUrl = process.env.NEXTAUTH_URL ?? "https://app.buybacksite.com";
     await sendNewOrderAlert({
-      to: adminEmail,
-      orderNumber,
-      deviceName: variant.model.name,
-      storageGb: variant.storageGb,
-      conditionLabel: condition.label,
-      quotedPrice,
+      to:             adminEmail,
+      orderNumber:    firstOrder.orderNumber,
+      deviceName:     items.length > 1
+        ? `${firstOrder.deviceName} + ${items.length - 1} more`
+        : firstOrder.deviceName,
+      storageGb:       firstOrder.storageGb,
+      conditionLabel:  firstOrder.conditionLabel,
+      quotedPrice:     totalPrice,
       sellerName,
       sellerEmail,
-      dashboardUrl: `${baseUrl}/dashboard/orders`,
+      dashboardUrl:   `${baseUrl}/dashboard/orders`,
     });
   }
 
   return NextResponse.json(
     {
-      orderNumber: order.orderNumber,
-      quotedPrice,
-      deviceName: variant.model.name,
-      storageGb: variant.storageGb,
-      carrier: variant.carrier,
-      conditionLabel: condition.label,
+      orders: createdOrders,
+      totalPrice,
+      labelUrl,
+      trackingNumber,
+      carrierName,
     },
     { status: 201 }
   );

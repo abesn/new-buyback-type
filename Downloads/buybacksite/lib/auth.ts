@@ -6,16 +6,14 @@ import { db } from "./db";
 import { UserRole } from "@prisma/client";
 
 export const authOptions: NextAuthOptions = {
-  // Prisma adapter — stores sessions and users in your PostgreSQL DB
+  // Prisma adapter — stores users and accounts in PostgreSQL
   adapter: PrismaAdapter(db) as Adapter,
 
   providers: [
-    // Magic-link email login — no passwords, works with any email
-    // Requires SMTP config (use Resend or any SMTP provider)
     EmailProvider({
       server: {
         host: process.env.EMAIL_SERVER_HOST,
-        port: Number(process.env.EMAIL_SERVER_PORT ?? 587),
+        port: Number(process.env.EMAIL_SERVER_PORT ?? 465),
         auth: {
           user: process.env.EMAIL_SERVER_USER,
           pass: process.env.EMAIL_SERVER_PASSWORD,
@@ -25,41 +23,65 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
 
-  // Use database sessions (not JWT) — safer for a SaaS with role-based access
+  // JWT strategy — required so middleware's getToken() can read the session
+  // from the cookie without hitting the database on every request.
   session: {
-    strategy: "database",
+    strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
 
   callbacks: {
-    // Attach role, tenantId, and tenantSlug to every session
-    async session({ session, user }) {
-      if (session.user && user) {
-        session.user.id = user.id;
-        session.user.role = user.role as UserRole;
-        session.user.tenantId = user.tenantId ?? undefined;
+    // Embed user fields into the JWT on first sign-in, refresh on every request
+    async jwt({ token, user, trigger }) {
+      // `user` is only present on the very first sign-in.
+      // The Prisma adapter only exposes standard NextAuth fields on `user`,
+      // so we always fetch role + tenantId directly from the DB.
+      if (user) {
+        const dbUser = await db.user.findUnique({
+          where: { id: user.id },
+          select: { role: true, tenantId: true },
+        });
+        token.id       = user.id;
+        token.role     = dbUser?.role     ?? UserRole.STAFF;
+        token.tenantId = dbUser?.tenantId ?? null;
+      }
 
-        // Attach tenantSlug for easy use in layouts/navigation
-        if (user.tenantId) {
-          const tenant = await db.tenant.findUnique({
-            where: { id: user.tenantId },
-            select: { slug: true, name: true, plan: true, status: true },
-          });
-          session.user.tenantSlug = tenant?.slug ?? undefined;
-          session.user.tenantName = tenant?.name ?? undefined;
-          session.user.tenantPlan = tenant?.plan ?? undefined;
-          session.user.tenantStatus = tenant?.status ?? undefined;
-        }
+      // Re-fetch tenant display fields on first load or explicit update()
+      if (token.tenantId && (trigger === "update" || !token.tenantName)) {
+        const tenant = await db.tenant.findUnique({
+          where: { id: token.tenantId as string },
+          select: { slug: true, name: true, plan: true, status: true },
+        });
+        token.tenantSlug   = tenant?.slug;
+        token.tenantName   = tenant?.name;
+        token.tenantPlan   = tenant?.plan;
+        token.tenantStatus = tenant?.status;
+      }
+
+      return token;
+    },
+
+    // Expose token fields on the session object used in server components
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id           = token.id as string;
+        session.user.role         = token.role as UserRole;
+        session.user.tenantId     = (token.tenantId as string) ?? undefined;
+        session.user.tenantSlug   = (token.tenantSlug as string) ?? undefined;
+        session.user.tenantName   = (token.tenantName as string) ?? undefined;
+        session.user.tenantPlan   = token.tenantPlan as string ?? undefined;
+        session.user.tenantStatus = token.tenantStatus as string ?? undefined;
       }
       return session;
     },
 
-    // Prevent sign-in for CANCELLED tenants
+    // Block sign-in for CANCELLED tenants
     async signIn({ user }) {
-      if (!user.tenantId) return true; // Platform admin or new user
+      const u = user as { tenantId?: string };
+      if (!u.tenantId) return true; // platform admin or unassigned
 
       const tenant = await db.tenant.findUnique({
-        where: { id: user.tenantId },
+        where: { id: u.tenantId },
         select: { status: true },
       });
 
@@ -72,13 +94,11 @@ export const authOptions: NextAuthOptions = {
   },
 
   pages: {
-    signIn: "/login",
-    verifyRequest: "/login?verify=true", // After magic link sent
-    error: "/login",
+    signIn:        "/login",
+    verifyRequest: "/login?verify=true",
+    error:         "/login",
   },
 
-  // Required: set a strong random string in .env as NEXTAUTH_SECRET
   secret: process.env.NEXTAUTH_SECRET,
-
-  debug: process.env.NODE_ENV === "development",
+  debug:  process.env.NODE_ENV === "development",
 };

@@ -1,4 +1,4 @@
-import { PrismaClient, Carrier } from "@prisma/client";
+import { PrismaClient, Carrier, TenantPlan, TenantStatus } from "@prisma/client";
 
 const db = new PrismaClient();
 
@@ -361,22 +361,61 @@ async function main() {
   console.log(`   ${totalModels} models`);
   console.log(`   ${totalVariants} variants\n`);
 
-  // 3. Optional: Create a default platform admin user
-  // Uncomment and set your email to create your admin account on first seed
-  /*
-  const adminEmail = "admin@buybacksite.com";
-  const existingAdmin = await db.user.findUnique({ where: { email: adminEmail } });
-  if (!existingAdmin) {
-    await db.user.create({
-      data: {
-        email: adminEmail,
-        name: "Platform Admin",
-        role: "PLATFORM_ADMIN",
-      },
+  // 3. Platform admin
+  console.log("Creating platform admin...");
+  await db.user.upsert({
+    where: { email: "abe@dawser.com" },
+    update: { role: "PLATFORM_ADMIN", name: "Abe" },
+    create: { email: "abe@dawser.com", name: "Abe", role: "PLATFORM_ADMIN" },
+  });
+  console.log("  ✓ Platform admin: abe@dawser.com\n");
+
+  // 4. Demo tenant
+  console.log("Creating demo tenant...");
+  const demoTenant = await db.tenant.upsert({
+    where: { slug: "demo" },
+    update: { name: "Demo Phone Shop", plan: TenantPlan.STARTER, status: TenantStatus.ACTIVE },
+    create: { name: "Demo Phone Shop", slug: "demo", plan: TenantPlan.STARTER, status: TenantStatus.ACTIVE },
+  });
+
+  // Tenant admin user for demo shop
+  await db.user.upsert({
+    where: { email: "admin@demo.com" },
+    update: { role: "TENANT_ADMIN", tenantId: demoTenant.id, name: "Demo Admin" },
+    create: { email: "admin@demo.com", name: "Demo Admin", role: "TENANT_ADMIN", tenantId: demoTenant.id },
+  });
+
+  // NAP settings (shop address)
+  await db.napSettings.upsert({
+    where: { tenantId: demoTenant.id },
+    update: {},
+    create: {
+      tenantId: demoTenant.id,
+      businessName: "Demo Phone Shop",
+      phone: "(555) 000-1234",
+      streetAddress: "123 Main Street",
+      city: "Austin",
+      state: "TX",
+      zipCode: "78701",
+      latitude: 30.2672,
+      longitude: -97.7431,
+    },
+  });
+
+  // Global pricing rule — 30 % margin
+  const existingRule = await db.pricingRule.findFirst({
+    where: { tenantId: demoTenant.id, scope: "GLOBAL", scopeId: null },
+  });
+  if (!existingRule) {
+    await db.pricingRule.create({
+      data: { tenantId: demoTenant.id, scope: "GLOBAL", scopeId: null, marginPercent: 0.30 },
     });
-    console.log(`✅ Platform admin created: ${adminEmail}`);
   }
-  */
+
+  console.log("  ✓ Tenant: Demo Phone Shop (slug: demo)");
+  console.log("  ✓ Tenant admin: admin@demo.com");
+  console.log("  ✓ NAP settings seeded");
+  console.log("  ✓ Global pricing rule: 30%\n");
 
   console.log("🌱 Seed complete.");
 }

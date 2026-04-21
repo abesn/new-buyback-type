@@ -36,7 +36,9 @@ export async function middleware(req: NextRequest) {
     cleanHost === ROOT_DOMAIN ||
     cleanHost.endsWith(`.${ROOT_DOMAIN}`) ||
     cleanHost === "localhost" ||
-    cleanHost.startsWith("localhost:");
+    cleanHost.startsWith("localhost:") ||
+    cleanHost === "lvh.me" ||
+    cleanHost.endsWith(".lvh.me");  // dev subdomain trick — *.lvh.me → 127.0.0.1
 
   const requestHeaders = new Headers(req.headers);
 
@@ -44,7 +46,9 @@ export async function middleware(req: NextRequest) {
     // Subdomain-based tenant: chicago-buyback.buybacksite.com → slug="chicago-buyback"
     const subdomain = cleanHost
       .replace(`.${ROOT_DOMAIN}`, "")
-      .replace(ROOT_DOMAIN, "");
+      .replace(ROOT_DOMAIN, "")
+      .replace(/\.lvh\.me$/, "")   // strip lvh.me dev suffix
+      .replace(/^lvh\.me$/, "");   // bare lvh.me has no subdomain
 
     if (subdomain && subdomain !== "www" && subdomain !== "app") {
       requestHeaders.set("x-tenant-slug", subdomain);

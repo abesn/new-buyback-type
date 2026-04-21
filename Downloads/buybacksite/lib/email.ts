@@ -15,10 +15,22 @@ const FROM = process.env.EMAIL_FROM ?? "no-reply@buybacksite.com";
 
 // ─── Order Confirmation ────────────────────────────────────────────────────────
 
+interface OrderResultItem {
+  orderNumber: string;
+  quotedPrice: number;
+  deviceName: string;
+  storageGb: number;
+  carrier: string;
+  conditionLabel: string;
+}
+
 interface OrderConfirmationData {
   to: string;
   sellerName: string;
   orderNumber: string;
+  // Multi-device support: all orders in this shipment
+  allOrders?: OrderResultItem[];
+  deviceSummary?: string[];
   deviceName: string;
   storageGb: number;
   carrier: string;
@@ -32,22 +44,44 @@ interface OrderConfirmationData {
   shippingZip: string;
   shopName: string;
   shopPhone: string;
+  labelUrl?: string;
+  trackingNumber?: string;
 }
 
 export async function sendOrderConfirmation(data: OrderConfirmationData) {
   const {
-    to, sellerName, orderNumber, deviceName, storageGb, carrier,
+    to, sellerName, orderNumber, allOrders, deviceSummary,
+    deviceName, storageGb, carrier,
     conditionLabel, quotedPrice, payoutMethod, shippingName,
     shippingAddress, shippingCity, shippingState, shippingZip,
-    shopName, shopPhone,
+    shopName, shopPhone, labelUrl, trackingNumber,
   } = data;
 
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+
+  const isMulti = allOrders && allOrders.length > 1;
   const storageLabel = storageGb >= 1024 ? "1TB" : `${storageGb}GB`;
   const carrierLabel = carrier === "UNLOCKED" ? "Unlocked" : carrier.replace("TMOBILE", "T-Mobile");
   const payoutLabel = payoutMethod.charAt(0) + payoutMethod.slice(1).toLowerCase().replace("_", " ");
-  const priceFormatted = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(quotedPrice);
+  const priceFormatted = fmt(quotedPrice);
 
-  const subject = `Offer confirmed — ${priceFormatted} for your ${deviceName} | ${orderNumber}`;
+  const subject = isMulti
+    ? `Orders confirmed — ${priceFormatted} total for ${allOrders!.length} devices | ${orderNumber}`
+    : `Offer confirmed — ${priceFormatted} for your ${deviceName} | ${orderNumber}`;
+
+  // Build device rows for multi-device orders
+  const deviceRows = isMulti && allOrders
+    ? allOrders.map((o) => {
+        const sl = o.storageGb >= 1024 ? "1TB" : `${o.storageGb}GB`;
+        const cl = o.carrier === "UNLOCKED" ? "Unlocked" : o.carrier.replace("TMOBILE", "T-Mobile");
+        return `<tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:8px 4px;font-size:14px;color:#374151;">${o.deviceName} ${sl} · ${cl} · ${o.conditionLabel}</td>
+          <td style="padding:8px 4px;font-size:14px;color:#374151;text-align:right;font-weight:600;">${fmt(o.quotedPrice)}</td>
+          <td style="padding:8px 4px;font-size:12px;color:#9ca3af;font-family:monospace;">${o.orderNumber}</td>
+        </tr>`;
+      }).join("")
+    : "";
 
   const html = `<!DOCTYPE html>
 <html>
@@ -90,9 +124,30 @@ export async function sendOrderConfirmation(data: OrderConfirmationData) {
 
       <div class="price-box">
         <div class="amount">${priceFormatted}</div>
-        <div class="device">${deviceName} · ${storageLabel} · ${carrierLabel} · ${conditionLabel}</div>
+        <div class="device">${isMulti ? `${allOrders!.length} devices — see details below` : `${deviceName} · ${storageLabel} · ${carrierLabel} · ${conditionLabel}`}</div>
       </div>
 
+      ${isMulti ? `
+      <div class="section">
+        <h3>Devices in This Shipment</h3>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:2px solid #e5e7eb;">
+              <th style="text-align:left;font-size:12px;color:#6b7280;padding:4px 4px 8px;font-weight:600;">Device</th>
+              <th style="text-align:right;font-size:12px;color:#6b7280;padding:4px 4px 8px;font-weight:600;">Offer</th>
+              <th style="text-align:left;font-size:12px;color:#6b7280;padding:4px 4px 8px;font-weight:600;">Order #</th>
+            </tr>
+          </thead>
+          <tbody>${deviceRows}</tbody>
+          <tfoot>
+            <tr>
+              <td style="padding:10px 4px 4px;font-size:14px;font-weight:700;color:#111;">Total payout</td>
+              <td style="padding:10px 4px 4px;font-size:16px;font-weight:800;color:#1d4ed8;text-align:right;">${priceFormatted}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>` : `
       <div class="section">
         <h3>Order Details</h3>
         <div class="info-row"><span class="info-label">Order #</span><strong>${orderNumber}</strong></div>
@@ -100,7 +155,15 @@ export async function sendOrderConfirmation(data: OrderConfirmationData) {
         <div class="info-row"><span class="info-label">Carrier</span>${carrierLabel}</div>
         <div class="info-row"><span class="info-label">Condition</span>${conditionLabel}</div>
         <div class="info-row"><span class="info-label">Payout Method</span>${payoutLabel}</div>
-      </div>
+      </div>`}
+
+      ${labelUrl ? `
+      <div style="margin:24px 0;text-align:center;">
+        <a href="${labelUrl}" target="_blank" style="display:inline-block;background:#16a34a;color:#fff;font-weight:700;font-size:15px;padding:14px 32px;border-radius:10px;text-decoration:none;">
+          ⬇ Download Your Free Shipping Label
+        </a>
+        ${trackingNumber ? `<p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Tracking number: <strong>${trackingNumber}</strong></p>` : ""}
+      </div>` : ""}
 
       <div class="section">
         <h3>Ship Your Device To</h3>
@@ -119,7 +182,10 @@ export async function sendOrderConfirmation(data: OrderConfirmationData) {
         </div>
         <div class="step">
           <div class="step-num">2</div>
-          <div class="step-text"><strong>Ship to the address above</strong> — write order <strong>${orderNumber}</strong> on the outside of the package. We recommend using a tracked shipping service.</div>
+          <div class="step-text">${labelUrl
+            ? `<strong>Print &amp; attach your prepaid label</strong> — click the green button above to download it, print it, and stick it on your package. Drop it off at any USPS location — shipping is completely <strong>free</strong>.`
+            : `<strong>Ship to the address above</strong> — write order <strong>${orderNumber}</strong> on the outside of the package. We recommend using a tracked shipping service.`
+          }</div>
         </div>
         <div class="step">
           <div class="step-num">3</div>
@@ -131,7 +197,7 @@ export async function sendOrderConfirmation(data: OrderConfirmationData) {
         </div>
       </div>
 
-      <p>Questions? Call or text us at <strong>${shopPhone}</strong>. Reference order ${orderNumber}.</p>
+      <p>Questions? Call or text us at <strong>${shopPhone}</strong>. Reference order ${isMulti ? `${orderNumber} (and ${allOrders!.length - 1} more)` : orderNumber}.</p>
     </div>
     <div class="footer">
       ${shopName} · This email confirms your buyback order. Do not reply to this email.
@@ -140,17 +206,27 @@ export async function sendOrderConfirmation(data: OrderConfirmationData) {
 </body>
 </html>`;
 
+  const deviceLines = isMulti && allOrders
+    ? allOrders.map((o) => {
+        const sl = o.storageGb >= 1024 ? "1TB" : `${o.storageGb}GB`;
+        const cl = o.carrier === "UNLOCKED" ? "Unlocked" : o.carrier.replace("TMOBILE", "T-Mobile");
+        return `  • ${o.deviceName} ${sl} · ${cl} · ${o.conditionLabel} — ${fmt(o.quotedPrice)} (${o.orderNumber})`;
+      }).join("\n")
+    : `  ${deviceName} ${storageLabel} · ${carrierLabel} · ${conditionLabel} — ${priceFormatted}`;
+
   const text = `Hi ${sellerName},
 
-Your offer is confirmed: ${priceFormatted} for your ${deviceName} ${storageLabel} (${conditionLabel}).
-Order #: ${orderNumber}
-
+${isMulti
+  ? `Your orders are confirmed! Total payout: ${priceFormatted}\n\nDevices:\n${deviceLines}`
+  : `Your offer is confirmed: ${priceFormatted} for your ${deviceName} ${storageLabel} (${conditionLabel}).\nOrder #: ${orderNumber}`
+}
+${labelUrl ? `\n⬇ Download your FREE prepaid shipping label:\n${labelUrl}\n${trackingNumber ? `Tracking: ${trackingNumber}\n` : ""}` : ""}
 Ship to:
 ${shippingName}
 ${shippingAddress}
 ${shippingCity}, ${shippingState} ${shippingZip}
 
-Write ${orderNumber} on the outside of your package.
+${labelUrl ? "Print the label, attach it to your package, and drop it off at any USPS location — shipping is free." : `Write ${orderNumber} on the outside of your package.`}
 
 Questions? Call ${shopPhone}.`;
 

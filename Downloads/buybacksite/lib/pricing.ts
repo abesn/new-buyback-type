@@ -67,12 +67,14 @@ interface VariantForSync {
  * Emits progress to Redis so the admin UI can poll it.
  */
 export async function syncMarketPrices(variantIds?: string[]): Promise<void> {
-  // Acquire lock
+  // Acquire lock (skip if Redis is unavailable — allow the sync to run unchecked)
   const { redis } = await import("./redis");
-  const locked = await redis.set(SYNC_LOCK_KEY, "1", "EX", SYNC_LOCK_TTL, "NX");
-  if (!locked) {
-    console.log("[pricing] Sync already running, skipping");
-    return;
+  if (redis) {
+    const locked = await redis.set(SYNC_LOCK_KEY, "1", "EX", SYNC_LOCK_TTL, "NX");
+    if (!locked) {
+      console.log("[pricing] Sync already running, skipping");
+      return;
+    }
   }
 
   const variants = await db.deviceVariant.findMany({
@@ -181,7 +183,7 @@ export async function syncMarketPrices(variantIds?: string[]): Promise<void> {
   }
 
   // Release lock and write final status
-  await redis.del(SYNC_LOCK_KEY);
+  if (redis) await redis.del(SYNC_LOCK_KEY);
   await cacheSet(
     SYNC_STATUS_KEY,
     {

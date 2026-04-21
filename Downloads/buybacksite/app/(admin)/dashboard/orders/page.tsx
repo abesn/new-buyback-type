@@ -33,6 +33,12 @@ export default async function OrdersPage({
       take: limit,
       include: {
         tenant: { select: { name: true, slug: true } },
+        items: {
+          include: {
+            variant: { include: { model: true } },
+            condition: { select: { label: true, grade: true } },
+          },
+        },
       },
     }),
     db.order.count({ where }),
@@ -66,6 +72,14 @@ export default async function OrdersPage({
           shippedAt: o.shippedAt?.toISOString() ?? null,
           receivedAt: o.receivedAt?.toISOString() ?? null,
           paidAt: o.paidAt?.toISOString() ?? null,
+          items: o.items.map((item) => ({
+            deviceName: item.variant.model.name,
+            storageGb: item.variant.storageGb,
+            carrier: item.variant.carrier,
+            conditionLabel: item.condition.label,
+            grade: item.condition.grade,
+            quotedPrice: Number(item.quotedPrice),
+          })),
         }))}
         total={total}
         page={page}

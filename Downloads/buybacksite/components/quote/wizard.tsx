@@ -49,17 +49,17 @@ interface NapData {
 }
 
 interface OrderResultItem {
-  orderNumber: string;
-  quotedPrice: number;
   deviceName: string;
   storageGb: number;
   carrier: string;
   conditionLabel: string;
+  quotedPrice: number;
 }
 
 interface OrderResult {
-  orders: OrderResultItem[];
+  orderNumber: string;
   totalPrice: number;
+  items: OrderResultItem[];
   labelUrl: string | null;
   trackingNumber: string | null;
   carrierName: string | null;
@@ -279,8 +279,9 @@ export function QuoteWizard({ tenantId, tenantName, catalog, nap }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to submit order");
       setOrderResult({
-        orders:         data.orders,
+        orderNumber:    data.orderNumber,
         totalPrice:     data.totalPrice,
+        items:          data.items,
         labelUrl:       data.labelUrl       ?? null,
         trackingNumber: data.trackingNumber ?? null,
         carrierName:    data.carrierName    ?? null,
@@ -839,41 +840,45 @@ export function QuoteWizard({ tenantId, tenantName, catalog, nap }: Props) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                {orderResult.orders.length > 1 ? "Orders confirmed!" : "Offer confirmed!"}
-              </h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-1">Order confirmed!</h1>
               <p className="text-gray-500">Check your email for shipping instructions.</p>
             </div>
 
-            {/* Per-device order cards */}
-            <div className="space-y-3 mb-4">
-              {orderResult.orders.map((o) => {
-                const storageLabel = o.storageGb >= 1024 ? "1TB" : `${o.storageGb}GB`;
-                const carrierLabel = CARRIER_LABELS[o.carrier] ?? o.carrier;
-                return (
-                  <div key={o.orderNumber} className="bg-white border border-gray-200 rounded-2xl p-5">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-xs text-gray-400 mb-0.5">Order number</p>
-                        <p className="font-mono font-bold text-gray-900 text-sm">{o.orderNumber}</p>
-                      </div>
-                      <p className="text-xl font-black text-green-600">{fmt(o.quotedPrice)}</p>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-2">
-                      {o.deviceName} · {storageLabel} · {carrierLabel} · {o.conditionLabel}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Total row */}
-            {orderResult.orders.length > 1 && (
-              <div className="bg-gray-900 text-white rounded-2xl px-5 py-4 flex justify-between items-center mb-4">
-                <span className="font-semibold">Total payout</span>
-                <span className="text-2xl font-black text-green-400">{fmt(orderResult.totalPrice)}</span>
+            {/* Single order card */}
+            <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <p className="text-xs text-gray-400 mb-0.5">Order number</p>
+                  <p className="font-mono font-bold text-gray-900">{orderResult.orderNumber}</p>
+                </div>
+                <p className="text-2xl font-black text-green-600">{fmt(orderResult.totalPrice)}</p>
               </div>
-            )}
+
+              {/* Device list */}
+              <div className="space-y-2 pt-3 border-t border-gray-100">
+                {orderResult.items.map((item, idx) => {
+                  const storageLabel = item.storageGb >= 1024 ? "1TB" : `${item.storageGb}GB`;
+                  const carrierLabel = CARRIER_LABELS[item.carrier] ?? item.carrier;
+                  return (
+                    <div key={idx} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-800 leading-snug">
+                          {item.deviceName} {storageLabel} · {carrierLabel}
+                        </p>
+                        <p className="text-xs text-gray-400">{item.conditionLabel}</p>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-700 flex-shrink-0">{fmt(item.quotedPrice)}</span>
+                    </div>
+                  );
+                })}
+                {orderResult.items.length > 1 && (
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                    <span className="text-xs text-gray-500 font-medium">Total</span>
+                    <span className="text-sm font-bold text-gray-900">{fmt(orderResult.totalPrice)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Prepaid label download */}
             {orderResult.labelUrl && (
@@ -897,7 +902,9 @@ export function QuoteWizard({ tenantId, tenantName, catalog, nap }: Props) {
             )}
 
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 mb-4">
-              <p className="text-sm font-semibold text-blue-900 mb-2">Ship your device{orderResult.orders.length > 1 ? "s" : ""} to:</p>
+              <p className="text-sm font-semibold text-blue-900 mb-2">
+                Ship your device{orderResult.items.length > 1 ? "s" : ""} to:
+              </p>
               <address className="not-italic text-sm text-blue-800 leading-relaxed">
                 <strong>{nap.businessName}</strong><br />
                 {nap.streetAddress}<br />
@@ -906,14 +913,14 @@ export function QuoteWizard({ tenantId, tenantName, catalog, nap }: Props) {
               <p className="text-xs text-blue-600 mt-2">
                 {orderResult.labelUrl
                   ? <>Print the label above and attach it to your package — <strong>shipping is free</strong>.</>
-                  : <>Write your order number on the outside of your package.</>
+                  : <>Write <strong>{orderResult.orderNumber}</strong> on the outside of your package.</>
                 }
               </p>
             </div>
 
             <div className="space-y-3 text-sm text-gray-600 mb-6">
               {[
-                { icon: "📦", text: "Pack it securely and drop it off at any USPS / FedEx / UPS location" },
+                { icon: "📦", text: "Pack securely and drop off at any USPS / FedEx / UPS location" },
                 { icon: "🔍", text: "We inspect within 1 business day of receiving your device" },
                 { icon: "💸", text: `Payment via ${PAYOUT_METHODS.find((m) => m.value === contact.payoutMethod)?.label} within 2 business days` },
               ].map((item) => (
@@ -941,15 +948,9 @@ export function QuoteWizard({ tenantId, tenantName, catalog, nap }: Props) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {orderResult.orders.length > 1 ? "Orders confirmed!" : "Order confirmed!"}
-            </h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Order confirmed!</h1>
             <p className="text-xl font-bold text-green-600 mb-4">{fmt(orderResult.totalPrice)}</p>
-            <div className="space-y-1 mb-4">
-              {orderResult.orders.map((o) => (
-                <p key={o.orderNumber} className="text-sm text-gray-500">Order #{o.orderNumber}</p>
-              ))}
-            </div>
+            <p className="text-sm text-gray-500 mb-4">Order #{orderResult.orderNumber}</p>
             <p className="text-sm text-gray-400">Check your email for shipping instructions.</p>
           </div>
         )}

@@ -19,6 +19,15 @@ const statusColors: Record<OrderStatus, string> = {
 
 const ALL_STATUSES = Object.values(OrderStatus);
 
+interface OrderItem {
+  deviceName: string;
+  storageGb: number;
+  carrier: string;
+  conditionLabel: string;
+  grade: string;
+  quotedPrice: number;
+}
+
 interface Order {
   id: string;
   orderNumber: string;
@@ -28,9 +37,9 @@ interface Order {
   quotedPrice: number;
   finalPrice: number | null;
   createdAt: string;
-  variantId: string;
   payoutMethod: string;
   tenant: { name: string; slug: string };
+  items: OrderItem[];
 }
 
 interface Props {
@@ -99,6 +108,7 @@ export function OrdersTable({ orders, total, page, pages, statusCounts, currentS
               <th className="px-5 py-3 text-xs font-medium text-gray-500">Order #</th>
               <th className="px-5 py-3 text-xs font-medium text-gray-500">Seller</th>
               {isPlatformAdmin && <th className="px-5 py-3 text-xs font-medium text-gray-500">Shop</th>}
+              <th className="px-5 py-3 text-xs font-medium text-gray-500">Device(s)</th>
               <th className="px-5 py-3 text-xs font-medium text-gray-500">Status</th>
               <th className="px-5 py-3 text-xs font-medium text-gray-500">Quoted</th>
               <th className="px-5 py-3 text-xs font-medium text-gray-500">Payout</th>
@@ -108,7 +118,7 @@ export function OrdersTable({ orders, total, page, pages, statusCounts, currentS
           <tbody className="divide-y divide-gray-50">
             {orders.length === 0 && (
               <tr>
-                <td colSpan={isPlatformAdmin ? 7 : 6} className="px-5 py-12 text-center text-gray-400">
+                <td colSpan={isPlatformAdmin ? 8 : 7} className="px-5 py-12 text-center text-gray-400">
                   No orders {currentStatus ? `with status "${currentStatus}"` : "yet"}.
                 </td>
               </tr>
@@ -133,6 +143,22 @@ export function OrdersTable({ orders, total, page, pages, statusCounts, currentS
                   <p className="text-xs text-gray-400">{o.sellerEmail}</p>
                 </td>
                 {isPlatformAdmin && <td className="px-5 py-3 text-xs text-gray-500">{o.tenant.name}</td>}
+                <td className="px-5 py-3">
+                  {o.items.length === 0 ? (
+                    <span className="text-xs text-gray-400">—</span>
+                  ) : (
+                    <div>
+                      <p className="text-sm text-gray-800 leading-snug">
+                        {o.items[0].deviceName} {o.items[0].storageGb >= 1024 ? "1TB" : `${o.items[0].storageGb}GB`}
+                      </p>
+                      {o.items.length > 1 ? (
+                        <p className="text-xs text-blue-600 font-medium">+{o.items.length - 1} more device{o.items.length > 2 ? "s" : ""}</p>
+                      ) : (
+                        <p className="text-xs text-gray-400">{o.items[0].conditionLabel}</p>
+                      )}
+                    </div>
+                  )}
+                </td>
                 <td className="px-5 py-3">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColors[o.status]}`}>
                     {o.status.charAt(0) + o.status.slice(1).toLowerCase().replace(/_/g, " ")}

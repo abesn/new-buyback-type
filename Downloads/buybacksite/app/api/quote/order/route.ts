@@ -119,80 +119,83 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Create one order per device (all share the same label) ───────────────────
-  const createdOrders: {
-    orderNumber: string;
-    quotedPrice: number;
-    deviceName: string;
-    storageGb: number;
-    carrier: string;
-    conditionLabel: string;
-  }[] = [];
+  // ── Create ONE order with all devices as OrderItem rows ──────────────────────
+  const orderNumber = await generateOrderNumber(tenantId);
+  const totalPrice  = verified.reduce((s, r) => s + Number(r.buyPrice), 0);
 
-  for (const row of verified) {
-    const orderNumber = await generateOrderNumber(tenantId);
-    const quotedPrice = Number(row.buyPrice);
-
-    await db.order.create({
-      data: {
-        tenantId,
-        orderNumber,
-        sellerName:       sellerName.trim(),
-        sellerEmail:      sellerEmail.trim().toLowerCase(),
-        sellerPhone:      sellerPhone?.trim()   || null,
-        variantId:        row.variantId,
-        conditionId:      row.conditionId,
-        quotedPrice,
-        payoutMethod,
-        payoutAddress:    payoutAddress?.trim() || null,
-        deviceNotes:      deviceNotes?.trim()   || null,
-        shippingLabelUrl: labelUrl,
-        trackingNumber,
-        carrierName,
-        status: "PENDING",
-        statusHistory: {
-          create: {
-            status: "PENDING",
-            note: items.length > 1
-              ? `Order created via quote wizard (batch of ${items.length} devices)`
-              : "Order created via quote wizard",
-          },
+  await db.order.create({
+    data: {
+      tenantId,
+      orderNumber,
+      sellerName:       sellerName.trim(),
+      sellerEmail:      sellerEmail.trim().toLowerCase(),
+      sellerPhone:      sellerPhone?.trim()   || null,
+      quotedPrice:      totalPrice,
+      payoutMethod,
+      payoutAddress:    payoutAddress?.trim() || null,
+      deviceNotes:      deviceNotes?.trim()   || null,
+      shippingLabelUrl: labelUrl,
+      trackingNumber,
+      carrierName,
+      status: "PENDING",
+      statusHistory: {
+        create: {
+          status: "PENDING",
+          note: items.length > 1
+            ? `Order created via quote wizard (${items.length} devices)`
+            : "Order created via quote wizard",
         },
       },
-    });
+      items: {
+        create: verified.map((row) => ({
+          variantId:   row.variantId,
+          conditionId: row.conditionId,
+          quotedPrice: row.buyPrice,
+        })),
+      },
+    },
+  });
 
-    createdOrders.push({
-      orderNumber,
-      quotedPrice,
-      deviceName:     row.variant.model.name,
-      storageGb:      row.variant.storageGb,
-      carrier:        row.variant.carrier,
+  // Build a summary of all devices for emails and the response
+  const deviceItems = verified.map((row) => {
+    const storageGb  = row.variant.storageGb;
+    const carrier    = row.variant.carrier;
+    const storageLabel = storageGb >= 1024 ? "1TB" : `${storageGb}GB`;
+    const carrierLabel = carrier === "UNLOCKED" ? "Unlocked" : carrier.replace("TMOBILE", "T-Mobile");
+    return {
+      variantId:     row.variantId,
+      conditionId:   row.conditionId,
+      deviceName:    row.variant.model.name,
+      storageGb,
+      carrier,
       conditionLabel: row.condition.label,
-    });
-  }
-
-  const totalPrice = createdOrders.reduce((s, o) => s + o.quotedPrice, 0);
-  const firstOrder = createdOrders[0];
+      quotedPrice:   Number(row.buyPrice),
+      // Short label for email device list
+      summary: `${row.variant.model.name} ${storageLabel} · ${carrierLabel} · ${row.condition.label}`,
+    };
+  });
 
   // ── Confirmation email (single email listing all devices) ────────────────────
   if (nap) {
-    const deviceSummary = createdOrders.map((o) => {
-      const storage = o.storageGb >= 1024 ? "1TB" : `${o.storageGb}GB`;
-      const carrier = o.carrier === "UNLOCKED" ? "Unlocked" : o.carrier.replace("TMOBILE", "T-Mobile");
-      return `${o.deviceName} ${storage} · ${carrier} · ${o.conditionLabel}`;
-    });
-
+    const firstDevice = deviceItems[0];
     await sendOrderConfirmation({
-      to:              sellerEmail,
+      to:             sellerEmail,
       sellerName,
-      // Use first order number as the reference; all are listed in the email body
-      orderNumber:     firstOrder.orderNumber,
-      allOrders:       createdOrders,
-      deviceName:      firstOrder.deviceName,
-      storageGb:       firstOrder.storageGb,
-      carrier:         firstOrder.carrier,
-      conditionLabel:  firstOrder.conditionLabel,
-      quotedPrice:     totalPrice,
+      orderNumber,
+      allOrders:      deviceItems.map((d) => ({
+        orderNumber,               // same number on every row
+        quotedPrice:  d.quotedPrice,
+        deviceName:   d.deviceName,
+        storageGb:    d.storageGb,
+        carrier:      d.carrier,
+        conditionLabel: d.conditionLabel,
+      })),
+      deviceSummary:  deviceItems.map((d) => d.summary),
+      deviceName:     firstDevice.deviceName,
+      storageGb:      firstDevice.storageGb,
+      carrier:        firstDevice.carrier,
+      conditionLabel: firstDevice.conditionLabel,
+      quotedPrice:    totalPrice,
       payoutMethod,
       shippingName:    nap.businessName,
       shippingAddress: nap.streetAddress,
@@ -203,7 +206,6 @@ export async function POST(req: NextRequest) {
       shopPhone:       nap.phone,
       labelUrl:        labelUrl    ?? undefined,
       trackingNumber:  trackingNumber ?? undefined,
-      deviceSummary,
     });
   }
 
@@ -211,25 +213,27 @@ export async function POST(req: NextRequest) {
   const adminEmail = tenant.users[0]?.email;
   if (adminEmail) {
     const baseUrl = process.env.NEXTAUTH_URL ?? "https://app.buybacksite.com";
+    const firstDevice = deviceItems[0];
     await sendNewOrderAlert({
-      to:             adminEmail,
-      orderNumber:    firstOrder.orderNumber,
-      deviceName:     items.length > 1
-        ? `${firstOrder.deviceName} + ${items.length - 1} more`
-        : firstOrder.deviceName,
-      storageGb:       firstOrder.storageGb,
-      conditionLabel:  firstOrder.conditionLabel,
-      quotedPrice:     totalPrice,
+      to:            adminEmail,
+      orderNumber,
+      deviceName:    items.length > 1
+        ? `${firstDevice.deviceName} + ${items.length - 1} more`
+        : firstDevice.deviceName,
+      storageGb:      firstDevice.storageGb,
+      conditionLabel: firstDevice.conditionLabel,
+      quotedPrice:    totalPrice,
       sellerName,
       sellerEmail,
-      dashboardUrl:   `${baseUrl}/dashboard/orders`,
+      dashboardUrl:  `${baseUrl}/dashboard/orders`,
     });
   }
 
   return NextResponse.json(
     {
-      orders: createdOrders,
+      orderNumber,
       totalPrice,
+      items:  deviceItems,
       labelUrl,
       trackingNumber,
       carrierName,

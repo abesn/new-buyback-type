@@ -14,6 +14,18 @@ interface StatusHistoryEntry {
   createdAt: string;
 }
 
+interface OrderItem {
+  id: string;
+  modelName: string;
+  brandName: string;
+  storageGb: number;
+  carrier: string;
+  conditionGrade: string;
+  conditionLabel: string;
+  quotedPrice: number;
+  finalPrice: number | null;
+}
+
 interface Order {
   id: string;
   orderNumber: string;
@@ -39,8 +51,7 @@ interface Order {
   tenantName: string;
   nap: { businessName: string; phone: string } | null;
   statusHistory: StatusHistoryEntry[];
-  device: { modelName: string; brandName: string; storageGb: number; carrier: string } | null;
-  condition: { grade: string; label: string } | null;
+  items: OrderItem[];
   canEdit?: boolean;
 }
 
@@ -229,8 +240,7 @@ export function OrderDetail({ order: initial, canEdit }: Props) {
     }
   };
 
-  const device = order.device;
-  const storageLabel = device ? (device.storageGb >= 1024 ? "1TB" : `${device.storageGb}GB`) : "";
+  const isMulti = order.items.length > 1;
 
   return (
     <div className="p-6 max-w-5xl">
@@ -258,33 +268,61 @@ export function OrderDetail({ order: initial, canEdit }: Props) {
         {/* ── Left column: details ──────────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-4">
 
-          {/* Device + pricing */}
+          {/* Devices */}
           <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Device</h2>
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-semibold text-gray-900 text-base">
-                  {device ? `${device.modelName} ${storageLabel}` : "—"}
-                </p>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {device ? CARRIER_LABELS[device.carrier] ?? device.carrier : ""}
-                  {order.condition ? ` · Grade ${order.condition.grade} — ${order.condition.label}` : ""}
-                </p>
-                {order.deviceNotes && (
-                  <p className="text-xs text-gray-400 mt-1.5 italic">"{order.deviceNotes}"</p>
-                )}
-              </div>
-              <div className="text-right flex-shrink-0 ml-4">
-                <p className="text-xs text-gray-400">Quoted</p>
-                <p className="text-xl font-bold text-gray-900">{fmt(order.quotedPrice)}</p>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                {isMulti ? `Devices (${order.items.length})` : "Device"}
+              </h2>
+              <div className="text-right">
+                <p className="text-xs text-gray-400">{order.finalPrice !== null ? "Quoted" : "Total quoted"}</p>
+                <p className="text-lg font-bold text-gray-900">{fmt(order.quotedPrice)}</p>
                 {order.finalPrice !== null && order.finalPrice !== order.quotedPrice && (
                   <>
-                    <p className="text-xs text-gray-400 mt-1">Final</p>
+                    <p className="text-xs text-gray-400">Final</p>
                     <p className="text-base font-semibold text-orange-600">{fmt(order.finalPrice)}</p>
                   </>
                 )}
               </div>
             </div>
+
+            {order.items.length === 0 ? (
+              <p className="text-sm text-gray-400">No device info available.</p>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {order.items.map((item) => {
+                  const storageLabel = item.storageGb >= 1024 ? "1TB" : `${item.storageGb}GB`;
+                  return (
+                    <div key={item.id} className="flex items-start justify-between py-2.5 first:pt-0 last:pb-0">
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 text-sm">
+                          {item.modelName} {storageLabel}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {CARRIER_LABELS[item.carrier] ?? item.carrier}
+                          {" · "}
+                          <span className="font-medium">Grade {item.conditionGrade}</span>
+                          {" — "}
+                          {item.conditionLabel}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="text-sm font-semibold text-gray-700">{fmt(item.quotedPrice)}</p>
+                        {item.finalPrice !== null && item.finalPrice !== item.quotedPrice && (
+                          <p className="text-xs text-orange-500 font-medium">→ {fmt(item.finalPrice)}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {order.deviceNotes && (
+              <p className="text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100 italic">
+                Note: &ldquo;{order.deviceNotes}&rdquo;
+              </p>
+            )}
           </div>
 
           {/* Seller info */}

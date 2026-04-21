@@ -58,23 +58,20 @@ export default async function OrderStatusPage({
     include: {
       tenant: { include: { napSettings: true } },
       statusHistory: { orderBy: { createdAt: "desc" } },
+      items: {
+        include: {
+          variant: { include: { model: true } },
+          condition: true,
+        },
+      },
     },
   });
 
   if (!order) notFound();
 
-  const variant = await db.deviceVariant.findUnique({
-    where: { id: order.variantId },
-    include: { model: true },
-  });
-
-  const condition = await db.deviceCondition.findUnique({
-    where: { id: order.conditionId },
-  });
-
   const statusInfo = STATUS_LABELS[order.status] ?? { label: order.status, color: "text-gray-700 bg-gray-50 border-gray-200", desc: "" };
   const nap = order.tenant.napSettings;
-  const storageGb = variant?.storageGb ?? 0;
+  const isMulti = order.items.length > 1;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -108,27 +105,32 @@ export default async function OrderStatusPage({
             </div>
           </div>
 
-          <div className="space-y-1.5 text-sm text-gray-600 pt-4 border-t border-gray-100">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Device</span>
-              <span className="font-medium text-gray-800">{variant?.model.name ?? "—"}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Storage</span>
-              <span>{storageGb >= 1024 ? "1TB" : `${storageGb}GB`}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Carrier</span>
-              <span>{CARRIER_LABELS[variant?.carrier ?? ""] ?? variant?.carrier}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Condition</span>
-              <span>{condition?.label ?? "—"}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Submitted</span>
-              <span>{new Date(order.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-            </div>
+          {/* Device list */}
+          <div className="space-y-3 pt-4 border-t border-gray-100">
+            {order.items.map((item) => {
+              const storageGb = item.variant.storageGb;
+              const storageLabel = storageGb >= 1024 ? "1TB" : `${storageGb}GB`;
+              return (
+                <div key={item.id} className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800 leading-snug">
+                      {item.variant.model.name} {storageLabel}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {CARRIER_LABELS[item.variant.carrier] ?? item.variant.carrier} · {item.condition.label}
+                    </p>
+                  </div>
+                  {isMulti && (
+                    <span className="text-sm font-semibold text-gray-700 flex-shrink-0">{fmt(Number(item.quotedPrice))}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-between text-sm text-gray-500 pt-3 border-t border-gray-100 mt-3">
+            <span className="text-gray-400">Submitted</span>
+            <span>{new Date(order.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
           </div>
         </div>
 

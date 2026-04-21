@@ -205,6 +205,7 @@ export async function PATCH(
 
 async function notifySeller(
   order: {
+    id: string;
     sellerEmail: string;
     sellerName: string;
     orderNumber: string;
@@ -219,11 +220,13 @@ async function notifySeller(
   status: OrderStatus,
   extra: Record<string, string | number | undefined>
 ) {
-  // Fetch device name for the email
-  const variant = await db.deviceVariant.findUnique({
-    where: { id: (await db.order.findUnique({ where: { orderNumber: order.orderNumber }, select: { variantId: true } }))!.variantId },
-    include: { model: true },
+  // Fetch device name from the first OrderItem
+  const firstItem = await db.orderItem.findFirst({
+    where: { orderId: order.id },
+    include: { variant: { include: { model: true } } },
+    orderBy: { id: "asc" },
   });
+  const variant = firstItem?.variant ?? null;
 
   await sendStatusEmail(status, {
     to: order.sellerEmail,

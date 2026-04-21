@@ -272,6 +272,7 @@ model DeviceVariant {
   model         DeviceModel    @relation(fields: [modelId], references: [id])
   buybackPrices BuybackPrice[]
   marketPrice   MarketPrice?
+  orderItems    OrderItem[]
 
   @@unique([modelId, storageGb, carrier])
   @@index([modelId])
@@ -297,6 +298,7 @@ model DeviceCondition {
   sortOrder   Int     @default(0)
 
   buybackPrices BuybackPrice[]
+  orderItems    OrderItem[]
 }
 
 // ─── Prices ───────────────────────────────────────────────────────────────────
@@ -373,10 +375,26 @@ model TenantDeviceSettings {
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
 
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  variantId   String
+  conditionId String
+  quotedPrice Decimal  @db.Decimal(10, 2)
+  finalPrice  Decimal? @db.Decimal(10, 2)
+
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant   DeviceVariant   @relation(fields: [variantId], references: [id])
+  condition DeviceCondition @relation(fields: [conditionId], references: [id])
+
+  @@index([orderId])
+  @@index([variantId])
+}
+
 model Order {
   id          String @id @default(cuid())
   tenantId    String
-  orderNumber String @unique // Human-readable: BB-20240001
+  orderNumber String @unique // Human-readable: BB-2025-0001
 
   // Seller info
   sellerName  String
@@ -384,9 +402,10 @@ model Order {
   sellerPhone String?
   sellerCity  String? // For analytics
 
-  // Device
-  variantId   String
-  conditionId String
+  // Devices — stored in OrderItem rows (one per device)
+  // Legacy single-device fields kept nullable for backward compatibility
+  variantId   String?
+  conditionId String?
   deviceNotes String? @db.Text // Any notes seller added about device condition
 
   // Pricing
@@ -414,6 +433,7 @@ model Order {
   rejectionReason String?
 
   tenant        Tenant               @relation(fields: [tenantId], references: [id])
+  items         OrderItem[]
   statusHistory OrderStatusHistory[]
 
   createdAt DateTime @default(now())

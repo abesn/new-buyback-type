@@ -18,6 +18,12 @@ export default async function OrderDetailPage({
     include: {
       tenant: { include: { napSettings: true } },
       statusHistory: { orderBy: { createdAt: "asc" } },
+      items: {
+        include: {
+          variant: { include: { model: { include: { brand: true } } } },
+          condition: true,
+        },
+      },
     },
   });
 
@@ -31,14 +37,6 @@ export default async function OrderDetailPage({
     redirect("/dashboard/orders");
   }
 
-  const [variant, condition] = await Promise.all([
-    db.deviceVariant.findUnique({
-      where: { id: order.variantId },
-      include: { model: { include: { brand: true } } },
-    }),
-    db.deviceCondition.findUnique({ where: { id: order.conditionId } }),
-  ]);
-
   const serialized = {
     id: order.id,
     orderNumber: order.orderNumber,
@@ -46,8 +44,6 @@ export default async function OrderDetailPage({
     sellerName: order.sellerName,
     sellerEmail: order.sellerEmail,
     sellerPhone: order.sellerPhone,
-    variantId: order.variantId,
-    conditionId: order.conditionId,
     deviceNotes: order.deviceNotes,
     quotedPrice: Number(order.quotedPrice),
     finalPrice: order.finalPrice != null ? Number(order.finalPrice) : null,
@@ -78,17 +74,17 @@ export default async function OrderDetailPage({
       note: h.note,
       createdAt: h.createdAt.toISOString(),
     })),
-    device: variant
-      ? {
-          modelName: variant.model.name,
-          brandName: variant.model.brand.name,
-          storageGb: variant.storageGb,
-          carrier: variant.carrier,
-        }
-      : null,
-    condition: condition
-      ? { grade: condition.grade, label: condition.label }
-      : null,
+    items: order.items.map((item) => ({
+      id: item.id,
+      modelName: item.variant.model.name,
+      brandName: item.variant.model.brand.name,
+      storageGb: item.variant.storageGb,
+      carrier: item.variant.carrier,
+      conditionGrade: item.condition.grade,
+      conditionLabel: item.condition.label,
+      quotedPrice: Number(item.quotedPrice),
+      finalPrice: item.finalPrice != null ? Number(item.finalPrice) : null,
+    })),
   };
 
   return (

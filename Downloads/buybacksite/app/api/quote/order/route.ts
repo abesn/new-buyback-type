@@ -212,7 +212,7 @@ export async function POST(req: NextRequest) {
   // ── Shop owner alert ─────────────────────────────────────────────────────────
   const adminEmail = tenant.users[0]?.email;
   if (adminEmail) {
-    const baseUrl = process.env.NEXTAUTH_URL ?? "https://app.buybacksite.com";
+    const baseUrl = process.env.NEXTAUTH_URL ?? `https://app.${process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "buybacksite.com"}`;
     const firstDevice = deviceItems[0];
     await sendNewOrderAlert({
       to:            adminEmail,

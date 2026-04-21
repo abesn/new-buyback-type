@@ -59,6 +59,13 @@ const IconPlatform = () => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
   </svg>
 );
+const IconBilling = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+    <rect x="2" y="5" width="20" height="14" rx="2" />
+    <path strokeLinecap="round" d="M2 10h20" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 15h4" />
+  </svg>
+);
 
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: <IconDashboard /> },
@@ -67,6 +74,7 @@ const navItems: NavItem[] = [
   { label: "Pricing", href: "/dashboard/pricing", icon: <IconPricing /> },
   { label: "Analytics", href: "/dashboard/analytics", icon: <IconAnalytics /> },
   { label: "Settings", href: "/dashboard/settings", icon: <IconSettings />, roles: [UserRole.TENANT_ADMIN] },
+  { label: "Billing", href: "/dashboard/billing", icon: <IconBilling />, roles: [UserRole.TENANT_ADMIN] },
   // Platform admin only
   { label: "All Tenants", href: "/platform/tenants", icon: <IconPlatform />, roles: [UserRole.PLATFORM_ADMIN] },
 ];
@@ -101,8 +109,10 @@ export function AdminSidebar({ user, tenantName }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {visibleItems.map((item) => {
+          // Exact match OR sub-path, but /dashboard only matches exactly (not sub-pages)
           const isActive =
-            pathname === item.href || pathname.startsWith(item.href + "/");
+            pathname === item.href ||
+            (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"));
           return (
             <Link
               key={item.href}

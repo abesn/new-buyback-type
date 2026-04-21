@@ -72,7 +72,7 @@ export function DomainSettingsForm({ tenantId, initial, subdomain }: Props) {
         {customDomain && (
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 space-y-1">
             <p className="font-medium">DNS setup required:</p>
-            <p>Add a CNAME record: <code className="bg-amber-100 px-1 rounded">@ → proxy.buybacksite.com</code></p>
+            <p>Add a CNAME record: <code className="bg-amber-100 px-1 rounded">@ → proxy.{process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "buybacksite.com"}</code></p>
             <p>Changes can take up to 24h to propagate.</p>
           </div>
         )}

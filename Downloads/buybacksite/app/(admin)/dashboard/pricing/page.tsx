@@ -48,6 +48,7 @@ export default async function PricingPage({
     buyPrice: number;
     marketValue: number;
     marginPercent: number;
+    manualOverride: boolean;
     updatedAt: Date;
     variant: {
       storageGb: number;
@@ -86,6 +87,7 @@ export default async function PricingPage({
       buyPrice: Number(p.buyPrice),
       marketValue: Number(p.marketValue),
       marginPercent: p.marginPercent,
+      manualOverride: p.manualOverride,
       updatedAt: p.updatedAt,
       variant: {
         storageGb: p.variant.storageGb,

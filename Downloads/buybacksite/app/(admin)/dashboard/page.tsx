@@ -26,6 +26,12 @@ export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
+  // If tenant admin with no NAP settings → onboarding
+  if (session.user.role === UserRole.TENANT_ADMIN && session.user.tenantId) {
+    const nap = await db.napSettings.findUnique({ where: { tenantId: session.user.tenantId } });
+    if (!nap) redirect("/dashboard/onboarding");
+  }
+
   const isPlatformAdmin = session.user.role === UserRole.PLATFORM_ADMIN;
   const tenantFilter = isPlatformAdmin ? {} : { tenantId: session.user.tenantId! };
 

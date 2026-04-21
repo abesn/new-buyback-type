@@ -313,6 +313,7 @@ model BuybackPrice {
   buyPrice      Decimal @db.Decimal(10, 2) // What the shop pays the seller
   marketValue   Decimal @db.Decimal(10, 2) // Current eBay comp (for feed + display)
   marginPercent Float   // Recorded at calculation time
+  manualOverride Boolean @default(false)  // True = skip on next price sync
 
   tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   variant   DeviceVariant   @relation(fields: [variantId], references: [id])

@@ -15,16 +15,35 @@ export default async function SettingsPage() {
 
   const tenantId = session.user.tenantId!;
 
-  const [tenant, napSettings, domainSettings, pricingRules] = await Promise.all([
+  const [tenant, napSettings, domainSettings, pricingRules, categories] = await Promise.all([
     db.tenant.findUnique({ where: { id: tenantId } }),
     db.napSettings.findUnique({ where: { tenantId } }),
     db.domainSettings.findUnique({ where: { tenantId } }),
-    db.pricingRule.findMany({ where: { tenantId, scope: "GLOBAL" } }),
+    db.pricingRule.findMany({
+      where: {
+        tenantId,
+        scope: { in: ["GLOBAL", "CATEGORY"] },
+      },
+    }),
+    db.deviceCategory.findMany({
+      where: { active: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true, slug: true },
+    }),
   ]);
 
   if (!tenant) redirect("/dashboard");
 
-  const globalMargin = pricingRules[0]?.marginPercent ?? 0.65;
+  const globalRule = pricingRules.find((r) => r.scope === "GLOBAL");
+  const globalMargin = globalRule?.marginPercent ?? 0.65;
+
+  // Build map categoryId → marginPercent (only overrides that exist)
+  const categoryMargins: Record<string, number> = {};
+  for (const rule of pricingRules) {
+    if (rule.scope === "CATEGORY" && rule.scopeId) {
+      categoryMargins[rule.scopeId] = rule.marginPercent;
+    }
+  }
 
   return (
     <div className="p-8 max-w-3xl">
@@ -59,7 +78,7 @@ export default async function SettingsPage() {
         <section>
           <h2 className="text-base font-semibold text-gray-800 mb-1">Custom Domain</h2>
           <p className="text-sm text-gray-500 mb-4">
-            Point your domain to <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">proxy.buybacksite.com</code> then add it here.
+            Point your domain to <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">proxy.{process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "buybacksite.com"}</code> then add it here.
           </p>
           <DomainSettingsForm
             tenantId={tenantId}
@@ -67,7 +86,7 @@ export default async function SettingsPage() {
               customDomain: domainSettings.customDomain ?? "",
               domainStatus: domainSettings.domainStatus,
             } : null}
-            subdomain={`${tenant.slug}.buybacksite.com`}
+            subdomain={`${tenant.slug}.${process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "buybacksite.com"}`}
           />
         </section>
 
@@ -76,9 +95,15 @@ export default async function SettingsPage() {
         <section>
           <h2 className="text-base font-semibold text-gray-800 mb-1">Pricing Rules</h2>
           <p className="text-sm text-gray-500 mb-4">
-            Global margin applied to all devices. You pay this percentage of current market value.
+            Set a global margin, then optionally override it per device category.
+            You offer this percentage of the current eBay market value.
           </p>
-          <PricingRulesForm tenantId={tenantId} globalMargin={globalMargin} />
+          <PricingRulesForm
+            tenantId={tenantId}
+            globalMargin={globalMargin}
+            categories={categories}
+            categoryMargins={categoryMargins}
+          />
         </section>
       </div>
     </div>

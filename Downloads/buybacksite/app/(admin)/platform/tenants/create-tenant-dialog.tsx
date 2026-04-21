@@ -87,7 +87,7 @@ export function CreateTenantDialog() {
                 placeholder="chicago-phone-buyback"
                 required
               />
-              <span className="px-3 py-2 bg-gray-50 text-xs text-gray-400 border-l border-gray-300">.buybacksite.com</span>
+              <span className="px-3 py-2 bg-gray-50 text-xs text-gray-400 border-l border-gray-300">.{process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "buybacksite.com"}</span>
             </div>
           </div>
           <div>

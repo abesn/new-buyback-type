@@ -291,6 +291,13 @@ export async function computeBuybackPrices(tenantId: string): Promise<number> {
   });
   const disabledModelIds = new Set(tenantSettings.map((s) => s.modelId));
 
+  // Build a set of variantId:conditionId keys that have manual overrides — skip them during sync
+  const manualRows = await db.buybackPrice.findMany({
+    where: { tenantId, manualOverride: true },
+    select: { variantId: true, conditionId: true },
+  });
+  const manualOverrideSet = new Set(manualRows.map((r) => `${r.variantId}:${r.conditionId}`));
+
   let written = 0;
 
   for (const variant of variants) {
@@ -309,6 +316,9 @@ export async function computeBuybackPrices(tenantId: string): Promise<number> {
       Number(variant.marketPrice.avgSalePrice) * carrierMultiplier;
 
     for (const condition of conditions) {
+      // Skip rows with manual overrides — preserve the admin's custom price
+      if (manualOverrideSet.has(`${variant.id}:${condition.id}`)) continue;
+
       const buyPrice =
         Math.round(marketValue * margin * condition.multiplier * 100) / 100;
 

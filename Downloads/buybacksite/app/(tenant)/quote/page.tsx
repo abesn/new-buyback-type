@@ -1,7 +1,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { db } from "@/lib/db";
-import { TenantHomePage } from "@/components/tenant/homepage";
+import { QuoteWizard } from "@/components/quote/wizard";
 import type { CatalogCategory } from "@/app/api/quote/catalog/route";
 
 async function resolveTenantFromHeaders() {
@@ -83,7 +84,7 @@ async function getCatalog(tenantId: string): Promise<CatalogCategory[]> {
     .filter((c) => c.brands.length > 0);
 }
 
-export default async function TenantPage() {
+export default async function QuotePage() {
   const tenant = await resolveTenantFromHeaders();
 
   if (!tenant) {
@@ -100,13 +101,28 @@ export default async function TenantPage() {
         state: tenant.napSettings.state,
         zipCode: tenant.napSettings.zipCode,
         phone: tenant.napSettings.phone,
-        facebookUrl: tenant.napSettings.facebookUrl,
-        instagramUrl: tenant.napSettings.instagramUrl,
       }
     : null;
 
+  if (catalog.length === 0) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-8">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 bg-white/5 border border-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">🔧</span>
+          </div>
+          <h1 className="text-xl font-bold text-white mb-2">{tenant.name}</h1>
+          <p className="text-gray-400">We&apos;re setting up our buyback catalog. Check back soon!</p>
+          <Link href="/" className="mt-6 inline-flex items-center gap-2 text-sm text-orange-500 hover:text-orange-400 transition-colors">
+            ← Back to home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <TenantHomePage
+    <QuoteWizard
       tenantId={tenant.id}
       tenantName={tenant.name}
       catalog={catalog}
@@ -134,7 +150,7 @@ export async function generateMetadata() {
   }
 
   return {
-    title: `${tenantName} — Sell Your Phone for Cash`,
+    title: `Get a Quote — ${tenantName}`,
     description: `Get an instant offer for your phone or tablet. ${tenantName} buys used devices — fast payment, free shipping.`,
     robots: { index: true, follow: true },
   };

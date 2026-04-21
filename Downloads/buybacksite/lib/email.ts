@@ -192,3 +192,108 @@ export async function sendNewOrderAlert(data: NewOrderAlertData) {
     console.error("[email] Failed to send new order alert:", err);
   }
 }
+
+// ─── Status Change Notifications (to seller) ──────────────────────────────────
+
+interface StatusEmailBase {
+  to: string;
+  sellerName: string;
+  orderNumber: string;
+  deviceName: string;
+  shopName: string;
+  shopPhone: string;
+}
+
+function statusEmailWrap(shopName: string, body: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9fafb;}
+    .wrap{max-width:520px;margin:32px auto;background:#fff;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden;}
+    .header{background:#1d4ed8;padding:24px 32px;}<br/>.header h1{margin:0;color:#fff;font-size:18px;font-weight:700;}
+    .body{padding:28px 32px;font-size:14px;line-height:1.6;color:#374151;}
+    .footer{padding:16px 32px;border-top:1px solid #f3f4f6;font-size:12px;color:#9ca3af;}
+  </style></head><body><div class="wrap">
+  <div class="header"><h1>${shopName}</h1></div>
+  <div class="body">${body}</div>
+  <div class="footer">${shopName} · Reply to this email or call us with questions.</div>
+  </div></body></html>`;
+}
+
+export async function sendStatusEmail(
+  status: string,
+  base: StatusEmailBase,
+  extra: Record<string, string | number> = {}
+) {
+  const { to, sellerName, orderNumber, deviceName, shopName, shopPhone } = base;
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+
+  type Template = { subject: string; html: string; text: string };
+
+  const templates: Partial<Record<string, Template>> = {
+    RECEIVED: {
+      subject: `We received your ${deviceName} | ${orderNumber}`,
+      html: statusEmailWrap(shopName, `<p>Hi ${sellerName},</p>
+        <p>Great news — your <strong>${deviceName}</strong> arrived safely (order <strong>${orderNumber}</strong>).</p>
+        <p>We'll begin inspection within <strong>1 business day</strong> and notify you of the result. No action needed from you.</p>
+        <p>Questions? Call or text <strong>${shopPhone}</strong>.</p>`),
+      text: `Hi ${sellerName},\n\nYour ${deviceName} arrived (order ${orderNumber}). Inspection starts within 1 business day.\n\nQuestions? Call ${shopPhone}.`,
+    },
+    OFFER_REVISED: {
+      subject: `Revised offer for your ${deviceName} | ${orderNumber}`,
+      html: statusEmailWrap(shopName, `<p>Hi ${sellerName},</p>
+        <p>After inspecting your <strong>${deviceName}</strong> (order <strong>${orderNumber}</strong>), we found the condition differs from what was selected.</p>
+        <p>Our revised offer is: <strong style="font-size:22px;color:#1d4ed8">${fmt(Number(extra.finalPrice ?? 0))}</strong></p>
+        ${extra.note ? `<p><em>Inspector note: ${extra.note}</em></p>` : ""}
+        <p>Please reply to accept or decline this revised offer. If we don't hear back within <strong>5 business days</strong>, we'll return your device.</p>
+        <p>Questions? Call or text <strong>${shopPhone}</strong>.</p>`),
+      text: `Hi ${sellerName},\n\nRevised offer for order ${orderNumber}: ${fmt(Number(extra.finalPrice ?? 0))}\n${extra.note ? `Note: ${extra.note}\n` : ""}\nReply to accept or decline within 5 business days.\n\nCall ${shopPhone} with questions.`,
+    },
+    APPROVED: {
+      subject: `Offer approved — payment on the way | ${orderNumber}`,
+      html: statusEmailWrap(shopName, `<p>Hi ${sellerName},</p>
+        <p>Your <strong>${deviceName}</strong> passed inspection (order <strong>${orderNumber}</strong>). 🎉</p>
+        <p>Your payment of <strong style="font-size:20px;color:#16a34a">${fmt(Number(extra.finalPrice ?? extra.quotedPrice ?? 0))}</strong> is being processed and will be sent within <strong>1–2 business days</strong>.</p>
+        <p>You'll receive one more email when the payment goes out.</p>
+        <p>Thank you for selling with ${shopName}!</p>`),
+      text: `Hi ${sellerName},\n\nYour ${deviceName} passed inspection (order ${orderNumber}). Payment of ${fmt(Number(extra.finalPrice ?? extra.quotedPrice ?? 0))} is on its way within 1-2 business days.\n\nThank you!`,
+    },
+    PAID: {
+      subject: `Payment sent! | ${orderNumber}`,
+      html: statusEmailWrap(shopName, `<p>Hi ${sellerName},</p>
+        <p>Your payment for order <strong>${orderNumber}</strong> has been sent!</p>
+        <p><strong>Amount:</strong> ${fmt(Number(extra.finalPrice ?? extra.quotedPrice ?? 0))}<br>
+        <strong>Method:</strong> ${extra.payoutMethod ?? ""}<br>
+        ${extra.payoutReference ? `<strong>Reference:</strong> ${extra.payoutReference}` : ""}</p>
+        <p>Thank you for doing business with <strong>${shopName}</strong>. We'd love to buy from you again!</p>`),
+      text: `Hi ${sellerName},\n\nPayment sent for order ${orderNumber}!\nAmount: ${fmt(Number(extra.finalPrice ?? extra.quotedPrice ?? 0))}\nMethod: ${extra.payoutMethod ?? ""}\n${extra.payoutReference ? `Reference: ${extra.payoutReference}\n` : ""}\nThank you!`,
+    },
+    REJECTED: {
+      subject: `Update on your ${deviceName} | ${orderNumber}`,
+      html: statusEmailWrap(shopName, `<p>Hi ${sellerName},</p>
+        <p>Unfortunately, we're unable to accept your <strong>${deviceName}</strong> (order <strong>${orderNumber}</strong>).</p>
+        ${extra.note ? `<p><strong>Reason:</strong> ${extra.note}</p>` : ""}
+        <p>We'll return your device to you free of charge. You'll receive a tracking number once it ships.</p>
+        <p>Questions? Call or text <strong>${shopPhone}</strong>.</p>`),
+      text: `Hi ${sellerName},\n\nWe can't accept your ${deviceName} (order ${orderNumber}).${extra.note ? `\nReason: ${extra.note}` : ""}\n\nWe'll return your device. Call ${shopPhone} with questions.`,
+    },
+    RETURNED: {
+      subject: `Your device has been shipped back | ${orderNumber}`,
+      html: statusEmailWrap(shopName, `<p>Hi ${sellerName},</p>
+        <p>Your <strong>${deviceName}</strong> (order <strong>${orderNumber}</strong>) has been shipped back to you.</p>
+        ${extra.trackingNumber ? `<p><strong>Tracking number:</strong> ${extra.trackingNumber}${extra.carrierName ? ` (${extra.carrierName})` : ""}</p>` : ""}
+        <p>Please allow 3–7 business days for delivery.</p>
+        <p>Questions? Call or text <strong>${shopPhone}</strong>.</p>`),
+      text: `Hi ${sellerName},\n\nYour ${deviceName} (order ${orderNumber}) has been shipped back.${extra.trackingNumber ? `\nTracking: ${extra.trackingNumber}` : ""}\n\nCall ${shopPhone} with questions.`,
+    },
+  };
+
+  const tmpl = templates[status];
+  if (!tmpl) return; // no email for this status
+
+  try {
+    const transport = createTransport();
+    await transport.sendMail({ from: FROM, to, subject: tmpl.subject, html: tmpl.html, text: tmpl.text });
+  } catch (err) {
+    console.error(`[email] Failed to send ${status} notification:`, err);
+  }
+}

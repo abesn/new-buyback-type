@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { OrderStatus } from "@prisma/client";
 
 const statusColors: Record<OrderStatus, string> = {
@@ -113,8 +114,20 @@ export function OrdersTable({ orders, total, page, pages, statusCounts, currentS
               </tr>
             )}
             {orders.map((o) => (
-              <tr key={o.id} className="hover:bg-gray-50 transition-colors cursor-pointer">
-                <td className="px-5 py-3 font-mono text-xs text-blue-600 font-medium">{o.orderNumber}</td>
+              <tr
+                key={o.id}
+                className="hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => router.push(`/dashboard/orders/${o.orderNumber}`)}
+              >
+                <td className="px-5 py-3">
+                  <Link
+                    href={`/dashboard/orders/${o.orderNumber}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="font-mono text-xs text-blue-600 font-medium hover:underline"
+                  >
+                    {o.orderNumber}
+                  </Link>
+                </td>
                 <td className="px-5 py-3">
                   <p className="font-medium text-gray-800">{o.sellerName}</p>
                   <p className="text-xs text-gray-400">{o.sellerEmail}</p>

@@ -12,7 +12,7 @@ const quoteSchema = z.object({
   storage: z.string().regex(/^[0-9]+(gb|tb)$/i),
   carrier: z.enum(['unlocked', 'verizon', 'att', 't-mobile', 'other']),
   condition: z.enum(['like-new', 'good', 'fair', 'poor']),
-});
+}).strict();
 
 // Map frontend carrier values → SellCell display values
 const CARRIER_MAP = {

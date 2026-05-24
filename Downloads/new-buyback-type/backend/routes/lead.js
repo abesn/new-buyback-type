@@ -20,8 +20,8 @@ const leadSchema = z.object({
     carrier: z.string().optional(),
     condition: z.string().optional(),
     quoted_at: z.string().optional(),
-  }),
-});
+  }).strict(),
+}).strict();
 
 router.post('/lead', async (req, res) => {
   // 1. Validate input

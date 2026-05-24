@@ -1,1 +1,699 @@
-/* TODO: Phase 3 */
+/* ============================================================
+   BuyBack Quote — styles.css
+   Mobile-first, no frameworks
+   ============================================================ */
+
+/* --- Reset & Base ------------------------------------------ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --primary:     #1e40af;
+  --primary-dk:  #1730880;
+  --primary-lt:  #3b82f6;
+  --accent:      #059669;
+  --accent-lt:   #10b981;
+  --bg:          #f8fafc;
+  --card-bg:     #ffffff;
+  --text:        #1e293b;
+  --muted:       #64748b;
+  --border:      #e2e8f0;
+  --border-sel:  #1e40af;
+  --danger:      #dc2626;
+  --danger-lt:   #fee2e2;
+  --success-lt:  #d1fae5;
+  --shadow-sm:   0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:   0 4px 12px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.05);
+  --radius:      12px;
+  --radius-sm:   8px;
+  --radius-pill: 9999px;
+  --transition:  0.18s ease;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  min-height: 100dvh;
+}
+
+/* --- Header ------------------------------------------------ */
+.site-header {
+  background: var(--primary);
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(30,64,175,0.25);
+}
+
+.header-inner {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.logo-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.logo-text {
+  font-size: 1.15rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: rgba(255,255,255,0.92);
+}
+
+.logo-text strong {
+  font-weight: 700;
+  color: #fff;
+}
+
+/* --- Progress Bar ------------------------------------------ */
+.progress-bar-wrapper {
+  background: var(--border);
+  height: 4px;
+  width: 100%;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-lt) 100%);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 0%;
+}
+
+/* --- Main Layout ------------------------------------------- */
+.main-content {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.app-container {
+  width: 100%;
+}
+
+/* --- Step Transitions -------------------------------------- */
+.app-container.fade-out {
+  animation: fadeOut 0.15s ease forwards;
+}
+
+.app-container.fade-in {
+  animation: fadeIn 0.2s ease forwards;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-6px); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Back Button ------------------------------------------- */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 0;
+  margin-bottom: 16px;
+  transition: color var(--transition);
+}
+
+.back-btn:hover {
+  color: var(--primary);
+}
+
+.back-btn::before {
+  content: "←";
+  font-size: 1rem;
+}
+
+/* --- Step Header ------------------------------------------- */
+.step-header {
+  margin-bottom: 24px;
+}
+
+.step-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.25;
+  margin-bottom: 6px;
+}
+
+.step-header p {
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+/* --- Option Grid ------------------------------------------- */
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (min-width: 480px) {
+  .option-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* --- Option Card ------------------------------------------- */
+.option-card {
+  background: var(--card-bg);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  transition: border-color var(--transition), box-shadow var(--transition),
+              transform var(--transition), background var(--transition);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+
+.option-card:hover:not(.disabled) {
+  border-color: var(--primary-lt);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.option-card:active:not(.disabled) {
+  transform: translateY(0);
+}
+
+.option-card.selected {
+  border-color: var(--primary);
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px var(--primary), var(--shadow-sm);
+}
+
+.option-card.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.option-card .card-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.option-card .card-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.option-card .card-sublabel {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: -4px;
+}
+
+.option-card .coming-soon-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--border);
+  color: var(--muted);
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+}
+
+/* --- Condition Cards (with description) -------------------- */
+.condition-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 400px) {
+  .condition-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.condition-card {
+  background: var(--card-bg);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: border-color var(--transition), box-shadow var(--transition),
+              transform var(--transition), background var(--transition);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.condition-card:hover {
+  border-color: var(--primary-lt);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.condition-card:active {
+  transform: translateY(0);
+}
+
+.condition-card.selected {
+  border-color: var(--primary);
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px var(--primary), var(--shadow-sm);
+}
+
+.condition-card .cond-label {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  margin-bottom: 4px;
+}
+
+.condition-card .cond-desc {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+/* --- Option Pills ------------------------------------------ */
+.pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.option-pill {
+  background: var(--card-bg);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 10px 20px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition),
+              color var(--transition), box-shadow var(--transition);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.option-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.option-pill.selected {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(30,64,175,0.3);
+}
+
+/* --- Buttons ----------------------------------------------- */
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius-sm);
+  padding: 13px 28px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition),
+              box-shadow var(--transition), transform var(--transition);
+  border: 2px solid transparent;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.btn-primary:hover {
+  background: var(--accent-lt);
+  border-color: var(--accent-lt);
+  box-shadow: 0 4px 12px rgba(5,150,105,0.35);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.btn-secondary:hover {
+  background: #eff6ff;
+  box-shadow: 0 2px 8px rgba(30,64,175,0.15);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
+}
+
+.btn-full {
+  width: 100%;
+}
+
+/* --- Quote Card -------------------------------------------- */
+.quote-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 32px 24px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.quote-device-summary {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.price-display {
+  font-size: 3.5rem;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  margin-bottom: 10px;
+}
+
+.price-display sup {
+  font-size: 1.75rem;
+  font-weight: 700;
+  vertical-align: super;
+}
+
+.quote-validity {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+.quote-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* --- Lead Form --------------------------------------------- */
+.lead-form-wrapper {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 28px 20px;
+  margin-bottom: 20px;
+}
+
+.lead-form-wrapper h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.lead-form-wrapper .form-subtitle {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+.lead-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 480px) {
+  .form-row.cols-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form-group label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.form-group input,
+.form-group select {
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--bg);
+  transition: border-color var(--transition), box-shadow var(--transition);
+  width: 100%;
+  appearance: auto;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(30,64,175,0.12);
+  background: #fff;
+}
+
+.form-group input.invalid,
+.form-group select.invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(220,38,38,0.10);
+}
+
+.form-group .field-error {
+  font-size: 0.78125rem;
+  color: var(--danger);
+  margin-top: 2px;
+}
+
+/* Payment radio group */
+.radio-group-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+  display: block;
+}
+
+.radio-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.radio-options label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-pill);
+  transition: border-color var(--transition), background var(--transition);
+  user-select: none;
+}
+
+.radio-options label:has(input:checked) {
+  border-color: var(--primary);
+  background: #eff6ff;
+  color: var(--primary);
+}
+
+.radio-options input[type="radio"] {
+  accent-color: var(--primary);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.form-submit-area {
+  margin-top: 8px;
+}
+
+.form-inline-error {
+  background: var(--danger-lt);
+  color: var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 12px;
+  display: none;
+}
+
+.form-inline-error.visible {
+  display: block;
+}
+
+/* --- Loading Overlay --------------------------------------- */
+.loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.spinner {
+  width: 52px;
+  height: 52px;
+  border: 4px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-overlay p {
+  color: var(--muted);
+  font-size: 0.9375rem;
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+/* --- Confirmation Card ------------------------------------- */
+.confirmation-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.confirmation-icon {
+  font-size: 3.5rem;
+  margin-bottom: 16px;
+  line-height: 1;
+}
+
+.confirmation-card h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.confirmation-card p {
+  color: var(--muted);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.confirmation-card p strong {
+  color: var(--text);
+}
+
+/* --- Error Card -------------------------------------------- */
+.error-card {
+  background: var(--card-bg);
+  border: 2px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.error-card h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--danger);
+}
+
+.error-card p {
+  color: var(--muted);
+  font-size: 0.9375rem;
+  margin-bottom: 20px;
+}
+
+/* --- Utility ----------------------------------------------- */
+.mt-4  { margin-top: 4px; }
+.mt-8  { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mt-24 { margin-top: 24px; }
+
+.text-center { text-align: center; }
+
+/* --- Scrollbar (Webkit) ------------------------------------ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }

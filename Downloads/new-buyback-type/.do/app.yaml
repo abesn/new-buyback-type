@@ -1,0 +1,51 @@
+name: buyback-quote
+region: nyc
+
+services:
+  - name: api
+    source_dir: backend
+    dockerfile_path: Dockerfile
+    http_port: 3001
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    health_check:
+      http_path: /health
+    envs:
+      - key: MARGIN_PERCENTAGE
+        value: "0.85"
+      - key: QUOTE_VALIDITY_HOURS
+        value: "24"
+      - key: NOTIFICATION_EMAIL
+        value: abe@dawser.com
+      - key: RESEND_API_KEY
+        value: ""
+        type: SECRET
+        # Set this in the DO App Platform console or via:
+        # doctl app update <app-id> --set-envs RESEND_API_KEY=<your-key>
+      - key: CACHE_TTL_MINUTES
+        value: "60"
+      - key: MAX_SCRAPE_RETRIES
+        value: "3"
+      - key: SELLCELL_BASE_URL
+        value: https://www.sellcell.com
+      - key: PORT
+        value: "3001"
+      - key: FRONTEND_ORIGIN
+        value: ${frontend.LIVE_URL}
+
+static_sites:
+  - name: frontend
+    source_dir: frontend
+    output_dir: .
+    # NOTE: DO App Platform does NOT inject env vars into pre-built static files
+    # at runtime (only into build steps). Since this frontend has no build step,
+    # the API_BASE env var below is informational only. After your first deploy,
+    # copy the api service's LIVE_URL from the DO console and hard-code it as
+    # the fallback in frontend/js/app.js (see README Deployment section).
+    routes:
+      - path: /
+        preserve_path_prefix: false
+    envs:
+      - key: API_BASE
+        value: ${api.LIVE_URL}
+        scope: RUN_TIME

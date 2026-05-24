@@ -13,11 +13,17 @@ const app = express();
 // Security headers
 app.use(helmet());
 
-// CORS — allow only the configured frontend origin
+// CORS — allow configured frontend origin; also allow null origin (file://) in development
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
+const IS_PROD = process.env.NODE_ENV === 'production';
 app.use(
   cors({
-    origin: FRONTEND_ORIGIN,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (null = file://, curl, Postman)
+      if (!origin) return callback(null, !IS_PROD);
+      if (origin === FRONTEND_ORIGIN) return callback(null, true);
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: false,

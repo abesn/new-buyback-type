@@ -100,8 +100,9 @@ router.post('/quote', async (req, res) => {
     quote_valid_hours: scraperResult.quote_valid_hours,
   };
 
-  // 6. Store FULL result (with vendor data) in cache for internal use
-  cache.set(cacheKey, scraperResult);
+  // 6. Cache the stripped public result only — never persist internal vendor data
+  //    (market_prices, average_market_price, MARGIN_PERCENTAGE must not reach clients)
+  cache.set(cacheKey, publicResult);
 
   return res.json(publicResult);
 });

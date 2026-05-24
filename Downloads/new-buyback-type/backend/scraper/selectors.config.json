@@ -1,0 +1,44 @@
+{
+  "price_result_container": ".recycler-price",
+  "vendor_name": ".recycler-price td.logo picture img",
+  "vendor_price": ".recycler-price td.sell div.price",
+  "storage_filter": ".tell-us-about label.radio-inline-capacity",
+  "carrier_filter": ".tell-us-about label.radio-inline-network",
+  "condition_filter": ".tell-us-about label.condition",
+  "_notes": {
+    "storage_values": ["256GB", "512GB", "1TB"],
+    "carrier_values": ["Unlocked", "Verizon", "AT&T", "T-Mobile", "Other"],
+    "condition_values": ["MINT", "GOOD", "POOR", "FAULTY"],
+    "condition_input_values": {
+      "MINT": "new",
+      "GOOD": "working",
+      "POOR": "poor",
+      "FAULTY": "broken"
+    },
+    "carrier_input_values": {
+      "Unlocked": "29",
+      "Verizon": "59",
+      "AT&T": "48",
+      "T-Mobile": "30",
+      "Other": "104"
+    },
+    "storage_input_values": {
+      "256GB": "91",
+      "512GB": "92",
+      "1TB": "28"
+    },
+    "page_load_wait_selector": ".recycler-price td.sell div.price",
+    "filter_interaction": "All filters are radio inputs (type=radio). Storage and carrier filters have the class 'do_ajax' and trigger an AJAX reload when clicked — click the <label> element or the <input> inside it. Condition inputs also have class 'do_ajax'. After clicking a filter, wait for the price rows to update (re-wait on page_load_wait_selector or watch for DOM change). Carrier/network labels use logo images with no visible text — use the input's data-attribute for the display name and the input's value (numeric ID) for the form value.",
+    "vendor_name_notes": "Use img.alt from td.logo picture img for the proper display name (e.g. 'BuyBackBoss'). Alternatively, td.logo a[title] gives the lowercase slug (e.g. 'buybackboss'). The picture element has two <source> elements before the <img> — querySelectorAll returns the img specifically.",
+    "duplicate_filter_sets": "The page has two sets of capacity labels (6 total, 3 unique) — one for mobile (offsetParent=null, hidden) and one for desktop. Scope to .tell-us-about to get exactly 3 unique capacity labels and avoid mobile duplicates.",
+    "vendor_count": 15,
+    "price_row_structure": "Each .recycler-price div wraps a single <table> with one visible <tbody> <tr> containing three <td>s: td.logo (vendor info), td.price (shipping/payment details), td.sell (price + CTA button). There are also 15 hidden rows (display:none) in the tbody for expandable detail sections.",
+    "verified_url": "https://www.sellcell.com/phones/apple-iphone-15-pro-max/",
+    "verified_date": "2026-05-24",
+    "sample_prices_at_verification": {
+      "BuyBackBoss": "$557.00",
+      "WebTradeIn": "$550.29",
+      "Gadget Buyback": "$537.00"
+    }
+  }
+}

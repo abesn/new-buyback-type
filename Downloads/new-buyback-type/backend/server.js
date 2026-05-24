@@ -19,8 +19,8 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (null = file://, curl, Postman)
-      if (!origin) return callback(null, !IS_PROD);
+      // No origin header (curl, Postman) or "null" string (browser file:// protocol) — allow in dev
+      if (!origin || origin === 'null') return callback(null, !IS_PROD);
       if (origin === FRONTEND_ORIGIN) return callback(null, true);
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },

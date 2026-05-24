@@ -408,12 +408,17 @@ async function fetchQuote() {
     condition: state.condition,
   };
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
   try {
     const res = await fetch(`${API_BASE}/api/quote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     const data = await res.json();
 
     if (!res.ok || !data.success) {
@@ -423,7 +428,11 @@ async function fetchQuote() {
     state.quote = data;
     renderQuoteResult();
   } catch (err) {
-    renderQuoteError(err.message || 'Something went wrong. Please try again.');
+    clearTimeout(timeoutId);
+    const msg = err.name === 'AbortError'
+      ? 'Request timed out. Please check your connection and try again.'
+      : (err.message || 'Something went wrong. Please try again.');
+    renderQuoteError(msg);
   }
 }
 
@@ -588,29 +597,46 @@ async function handleLeadSubmit(e) {
     return;
   }
 
-  // --- Collect form data ---
+  // --- Collect form data and map to API schema field names ---
   const formData = new FormData(form);
-  const body = {};
-  formData.forEach((val, key) => { body[key] = val; });
+  const raw = {};
+  formData.forEach((val, key) => { raw[key] = val; });
 
-  // Attach quote context
-  if (state.quote) {
-    body.our_quote   = state.quote.our_quote;
-    body.device      = state.quote.device || deviceSummaryLabel();
-    body.quoted_at   = state.quote.quoted_at;
-  }
+  const body = {
+    name:           raw.full_name,
+    email:          raw.email,
+    phone:          raw.phone,
+    address:        raw.address,
+    city:           raw.city,
+    state:          raw.state,
+    zip:            raw.zip,
+    paymentMethod:  raw.payment_method,
+    paymentDetails: raw.payment_details,
+    quote: state.quote ? {
+      our_quote:  state.quote.our_quote,
+      device:     state.quote.device || deviceSummaryLabel(),
+      carrier:    state.quote.carrier,
+      condition:  state.quote.condition,
+      quoted_at:  state.quote.quoted_at,
+    } : undefined,
+  };
 
   // Disable button during submit
   const submitBtn = document.getElementById('submit-btn');
   submitBtn.disabled = true;
   submitBtn.textContent = 'Submitting…';
 
+  const leadController = new AbortController();
+  const leadTimeoutId = setTimeout(() => leadController.abort(), 15000);
+
   try {
     const res = await fetch(`${API_BASE}/api/lead`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: leadController.signal,
     });
+    clearTimeout(leadTimeoutId);
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
@@ -621,7 +647,11 @@ async function handleLeadSubmit(e) {
     state.confirmedEmail = body.email;
     transition(renderConfirmation);
   } catch (err) {
-    errorBox.textContent = err.message || 'Something went wrong. Please try again.';
+    clearTimeout(leadTimeoutId);
+    const msg = err.name === 'AbortError'
+      ? 'Request timed out. Please check your connection and try again.'
+      : (err.message || 'Something went wrong. Please try again.');
+    errorBox.textContent = msg;
     errorBox.classList.add('visible');
     submitBtn.disabled = false;
     submitBtn.textContent = 'Submit & Get Shipping Label';

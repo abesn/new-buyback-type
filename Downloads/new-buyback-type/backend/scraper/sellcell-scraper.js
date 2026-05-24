@@ -119,6 +119,7 @@ async function scrapeSellCell({ url, storage, carrier, condition }) {
     }
     if (!storageClicked) {
       console.error(`[scraper] Storage filter not found for "${storage}" at ${url}`);
+      return [];
     }
 
     // --- Carrier filter ---
@@ -253,6 +254,7 @@ async function getQuote({ brand, model, storage, carrier, condition }) {
     }
   }
 
+  console.error('[scraper] All retries exhausted:', lastError.message);
   throw lastError;
 }
 

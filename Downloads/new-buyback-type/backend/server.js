@@ -6,6 +6,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
 const quoteRouter = require('./routes/quote');
+const leadRouter = require('./routes/lead');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/api/', apiLimiter);
 
 // Routes
 app.use('/api', quoteRouter);
+app.use('/api', leadRouter);
 
 // Health check (not rate-limited)
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
